@@ -1,10 +1,15 @@
+#include <stdio.h>
+
 #include "common.h"
 #include "chunk.h"
+#include "vm.h"
 #include "debug.h"
+
 
 int main(int argc, const char* argv[]) {
   Chunk chunk;
   initChunk(&chunk);
+  initVM();
 
   // Write a constant (once we have a vm, this would push it to the stack)
   //
@@ -18,7 +23,10 @@ int main(int argc, const char* argv[]) {
   writeChunk(&chunk, OP_RETURN, 123);
 
   disassembleChunk(&chunk, "Initial example chunk");
+  printf("\n\n*** Traced execution: ***\n\n");
+  interpret(&chunk);
 
+  freeVM();
   freeChunk(&chunk);
   return 0;
 }
