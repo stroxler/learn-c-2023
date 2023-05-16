@@ -11,11 +11,11 @@ int main(int argc, const char* argv[]) {
   // Note that this isn't really type-safe: we're casting an int to uint8_t here, if
   // we have too many constants we will overflow.
   int constant_index = addConstant(&chunk, 42.0);
-  writeChunk(&chunk, OP_CONSTANT);
-  writeChunk(&chunk, constant_index);
+  writeChunk(&chunk, OP_CONSTANT, 123);
+  writeChunk(&chunk, constant_index, 123);
 
   // write a return op
-  writeChunk(&chunk, OP_RETURN);
+  writeChunk(&chunk, OP_RETURN, 123);
 
   disassembleChunk(&chunk, "Initial example chunk");
 
