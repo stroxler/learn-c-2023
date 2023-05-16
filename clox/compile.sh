@@ -17,4 +17,4 @@ ld \
    -macos_version_min 13.3.1 -arch arm64 \
    -L$(xcode-select -p)/SDKs/MacOSX.sdk/usr/lib -lSystem \
    -o clox.exe \
-   main.o
+   main.o memory.o chunk.o
