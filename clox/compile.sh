@@ -9,8 +9,9 @@
 
 export CFLAGS="-c"
 
-gcc -c -o main.o main.c
+gcc -c -o memory.o memory.c
 gcc -c -o chunk.o chunk.c
+gcc -c -o main.o main.c
 
 ld \
    -macos_version_min 13.3.1 -arch arm64 \
