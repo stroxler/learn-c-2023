@@ -5,8 +5,20 @@
 int main(int argc, const char* argv[]) {
   Chunk chunk;
   initChunk(&chunk);
+
+  // Write a constant (once we have a vm, this would push it to the stack)
+  //
+  // Note that this isn't really type-safe: we're casting an int to uint8_t here, if
+  // we have too many constants we will overflow.
+  int constant_index = addConstant(&chunk, 42.0);
+  writeChunk(&chunk, OP_CONSTANT);
+  writeChunk(&chunk, constant_index);
+
+  // write a return op
   writeChunk(&chunk, OP_RETURN);
+
   disassembleChunk(&chunk, "Initial example chunk");
+
   freeChunk(&chunk);
   return 0;
 }
