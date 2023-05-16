@@ -22,4 +22,6 @@ void initChunk(Chunk* chunk);
 
 void writeChunk(Chunk* chunk, uint8_t code_byte);
 
+void freeChunk(Chunk* chunk);
+
 #endif
