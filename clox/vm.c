@@ -117,10 +117,15 @@ Value pop() {
 }
 
 
-InterpretResult interpret(Chunk* chunk) {
+InterpretResult interpretChunk(Chunk* chunk) {
   vm.chunk = chunk;
   vm.ip = vm.chunk->code;
   return run();
+}
+
+
+InterpretResult interpret(const char* source) {
+  return INTERPRET_OK;
 }
 
 
