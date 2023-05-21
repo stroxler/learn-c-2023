@@ -134,8 +134,68 @@ static bool isAlphaNumericUnderscore(char c) {
 }
 
 
+static TokenType maybeKeyword(int start,
+		              int length,
+			      const char* rest,
+			      TokenType type) {
+  if (scanner.current - scanner.previous == start + length
+      && memcmp(scanner.previous + start, rest, length) == 0) {
+    return type;
+  } else {
+    return TOKEN_IDENTIFIER;
+  }
+}
+				    
+
+
 static TokenType identifierOrKeywordType() {
-  return TOKEN_IDENTIFIER;
+  switch (scanner.previous[0]) {
+  case 'a':
+    return maybeKeyword(1, 2, "nd", TOKEN_AND);
+  case 'c':
+    return maybeKeyword(1, 3, "ass", TOKEN_CLASS);
+  case 'e':
+    return maybeKeyword(1, 3, "lse", TOKEN_ELSE);
+  case 'f':
+    switch (scanner.previous[1]) {
+    case 'a':
+      return maybeKeyword(2, 3, "lse", TOKEN_FOR);
+    case 'o':
+      return maybeKeyword(2, 1, "r", TOKEN_FALSE);
+    case 'u':
+      return maybeKeyword(2, 1, "n", TOKEN_FUN);
+    default:
+      return TOKEN_IDENTIFIER;
+    }
+  case 'i':
+    return maybeKeyword(1, 1, "f", TOKEN_IF);
+  case 'n':
+    return maybeKeyword(1, 2, "il", TOKEN_NIL);
+  case 'o':
+    return maybeKeyword(1, 1, "r", TOKEN_OR);
+  case 'p':
+    return maybeKeyword(1, 4, "rint", TOKEN_PRINT);
+  case 'r':
+    return maybeKeyword(1, 5, "eturn", TOKEN_RETURN);
+  case 's':
+    return maybeKeyword(1, 4, "uper", TOKEN_SUPER);
+  case 't': {
+    switch (scanner.previous[1]) {
+    case 'h':
+      return maybeKeyword(2, 2, "is", TOKEN_THIS);
+    case 'r':
+      return maybeKeyword(2, 2, "ue", TOKEN_TRUE);
+    default:
+      return TOKEN_IDENTIFIER;
+    }
+  }
+  case 'v':
+    return maybeKeyword(1, 2, "ar", TOKEN_VAR);
+  case 'w':
+    return maybeKeyword(1, 4, "hile", TOKEN_WHILE);
+  default:
+    return TOKEN_IDENTIFIER;
+  }
 }
 
 
