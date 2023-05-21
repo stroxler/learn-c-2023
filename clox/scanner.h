@@ -9,7 +9,7 @@ typedef enum {
   TOKEN_LEFT_BRACE, TOKEN_RIGHT_BRACE,
   TOKEN_COMMA, TOKEN_DOT, TOKEN_SEMICOLON,
   TOKEN_PLUS, TOKEN_MINUS,
-  TOKEN_SLASH, TOKEN_STAR,
+  TOKEN_STAR, TOKEN_SLASH,
   // One character tokens that are also leaders of two-character tokens
   TOKEN_BANG, TOKEN_EQUAL,
   TOKEN_LESS, TOKEN_GREATER,

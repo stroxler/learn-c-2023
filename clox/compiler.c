@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "scanner.h"
+#include "chunk.h"
 
 #include "compiler.h"
 
@@ -23,7 +24,10 @@ void showTokens() {
   }
 }
 
-void compile(const char* source) {
+
+bool compile(Chunk* chunk, const char* source) {
   initScanner(source);
+  // // debug hook:
   showTokens();
+  return false;
 }

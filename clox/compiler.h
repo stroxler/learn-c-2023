@@ -2,7 +2,10 @@
 #define clox_compiler_h
 
 
-void compile(const char* source);
+#include "chunk.h"
+
+
+bool compile(Chunk* chunk, const char* source);
 
 
 #endif
