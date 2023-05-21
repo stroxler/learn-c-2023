@@ -30,6 +30,8 @@ InterpretResult interpret(const char* source);
 
 void push(Value value);
 
+Value peek(int distance);
+
 Value pop();
 
 void freeVM();

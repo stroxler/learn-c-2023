@@ -154,6 +154,7 @@ static void emitConstant(Value value) {
   emit2Bytes(OP_CONSTANT, makeConstant(value));
 }
 
+
 // Parse precedence and Pratt tables ----------------------------
 
 
@@ -286,7 +287,7 @@ static void parsePrecedence(Precedence precedence) {
 /* Parse a number, and add a constant to the bytecode */
 static void number() {
   double value = strtod(parser.previous.start, NULL);
-  emitConstant(value);
+  emitConstant(NUMBER_VAL(value));
 }
 
 /* Parse an expression, consume ending ) */

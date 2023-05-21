@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdarg.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -25,6 +26,30 @@ void initVM() {
   resetStack();
 }
 
+static void runtimeError(const char* format, ...) {
+  // Dump the raw message to stderr
+  va_list args;
+  va_start (args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+  // Find the relevant line number and dump that as well
+  //
+  // Why the extra -1? Remember that one invariant is `ip` always
+  // points at the *next* byte we would work with, not the one we are
+  // currently processing (the READ_BYTE macro enforces this).
+  size_t instruction = vm.ip - vm.chunk->code - 1;
+  int line = vm.chunk->lines[instruction];
+  fprintf(stderr, "[line %d]\n", line);
+
+  // We're always going to abort execution when we hit a runtimeError
+  // (we do it in the caller, boundaries often aren't super clean in
+  // idiomatic C code, but by globally analyzing the interpreter you
+  // can verify this). So we always want to reset the stack.
+  resetStack();
+}
+
+
 /* Macros for `run()`. We unset them after. */
 
 
@@ -40,11 +65,19 @@ void initVM() {
 //
 // This `do { ... } while (false)` pattern is a standard way to
 // ensure that multi-line macros can be used when not wrapped in a block.
-#define C_BINARY_OP(op) \
+//
+// Note that compile correctness ensures the stack will always have enough
+// elements when we run this, a stack underflow can't happen unless our impl
+// itself is buggy.
+#define C_BINARY_NUMERIC_OP(valueType, op)	\
   do { \
-    double b = pop(); \
-    double a = pop(); \
-    push(a op b); \
+    if (!IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) { \
+      runtimeError("Operands must be numbers."); \
+      return INTERPRET_RUNTIME_ERROR; \
+    } \
+    double b = AS_NUMBER(pop()); \
+    double a = AS_NUMBER(pop()); \
+    push(valueType(a op b)); \
   } while (false)
 
 
@@ -72,15 +105,20 @@ static InterpretResult run() {
       break;
     }
     case OP_ADD:
-      C_BINARY_OP(+); break;
+      C_BINARY_NUMERIC_OP(NUMBER_VAL, +); break;
     case OP_SUBTRACT:
-      C_BINARY_OP(-); break;
+      C_BINARY_NUMERIC_OP(NUMBER_VAL, -); break;
     case OP_MULTIPLY:
-      C_BINARY_OP(*); break;
+      C_BINARY_NUMERIC_OP(NUMBER_VAL, *); break;
     case OP_DIVIDE:
-      C_BINARY_OP(/); break;
+      C_BINARY_NUMERIC_OP(NUMBER_VAL, /); break;
     case OP_NEGATE:
-      push(-pop()); break;
+      if (!IS_NUMBER(peek(0))) {
+	runtimeError("Operand to unary - must be a number.");
+	return INTERPRET_RUNTIME_ERROR;
+      }
+      push(NUMBER_VAL(-AS_NUMBER(pop())));
+      break;
     case OP_RETURN: {
       printf("\nRETURN: ");
       printValue(pop());
@@ -89,13 +127,12 @@ static InterpretResult run() {
     }
     }
   }
-
 }
 
 /* unset the macros that are for use in `run` */
 #undef READ_CONSTANT
 #undef READ_BYTE
-#undef C_BINARY_OP
+#undef C_BINARY_NUMERIC_OP
 
 
 void push(Value value) {
@@ -115,6 +152,11 @@ Value pop() {
   // So we can decrement first then dereference
   vm.stack_top--;
   return *vm.stack_top;
+}
+
+
+Value peek(int distance) {
+  return vm.stack_top[-1 - distance];
 }
 
 

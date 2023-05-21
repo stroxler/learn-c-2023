@@ -27,3 +27,10 @@ void freeValueArray(ValueArray* array) {
   FREE_ARRAY(Value, array->values, array->count);
   initValueArray(array);
 }
+
+
+void printValue(Value value) {
+  // %g is a "smart" formatter that uses scientific notation in some
+  // %cases.
+  printf("%g", AS_NUMBER(value));
+}

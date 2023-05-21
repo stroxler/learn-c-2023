@@ -18,12 +18,6 @@ void disassembleChunk(Chunk* chunk, const char* name) {
 }
 
 
-void printValue(Value value) {
-  // %g is a "smart" formatter that uses scientific notation in some
-  // %cases.
-  printf("%g", value);
-}
-
 int simpleInstruction(const char* name, int offset) {
   printf("%s\n", name);
   return offset + 1;
