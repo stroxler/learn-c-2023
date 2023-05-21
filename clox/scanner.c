@@ -8,7 +8,7 @@
 
 
 typedef struct {
-  const char* previous;
+  const char* start;
   const char* current;
   int line;
 } Scanner;
@@ -18,7 +18,7 @@ Scanner scanner;
 
 
 void initScanner(const char* source) {
-  scanner.previous = source;
+  scanner.start = source;
   scanner.current = source;
   scanner.line = 1;
 }
@@ -27,8 +27,8 @@ void initScanner(const char* source) {
 static Token makeToken(TokenType type) {
   Token token;
   token.type = type;
-  token.start = scanner.previous;
-  token.length = (int)(scanner.current - scanner.previous);
+  token.start = scanner.start;
+  token.length = (int)(scanner.current - scanner.start);
   token.line = scanner.line;
   return token;
 }
@@ -86,7 +86,7 @@ static void skipWhitespaceLoop() {
 
 static void skipWhitespace() {
   skipWhitespaceLoop();
-  scanner.previous = scanner.current;
+  scanner.start = scanner.current;
 }
 
 
@@ -134,12 +134,12 @@ static bool isAlphaNumericUnderscore(char c) {
 }
 
 
-static TokenType maybeKeyword(int start,
-		              int length,
+static TokenType maybeKeyword(int begin_match,
+		              int match_length,
 			      const char* rest,
 			      TokenType type) {
-  if (scanner.current - scanner.previous == start + length
-      && memcmp(scanner.previous + start, rest, length) == 0) {
+  if (scanner.current - scanner.start == begin_match + match_length
+      && memcmp(scanner.start + begin_match, rest, match_length) == 0) {
     return type;
   } else {
     return TOKEN_IDENTIFIER;
@@ -149,7 +149,7 @@ static TokenType maybeKeyword(int start,
 
 
 static TokenType identifierOrKeywordType() {
-  switch (scanner.previous[0]) {
+  switch (scanner.start[0]) {
   case 'a':
     return maybeKeyword(1, 2, "nd", TOKEN_AND);
   case 'c':
@@ -157,7 +157,7 @@ static TokenType identifierOrKeywordType() {
   case 'e':
     return maybeKeyword(1, 3, "lse", TOKEN_ELSE);
   case 'f':
-    switch (scanner.previous[1]) {
+    switch (scanner.start[1]) {
     case 'a':
       return maybeKeyword(2, 3, "lse", TOKEN_FOR);
     case 'o':
@@ -180,7 +180,7 @@ static TokenType identifierOrKeywordType() {
   case 's':
     return maybeKeyword(1, 4, "uper", TOKEN_SUPER);
   case 't': {
-    switch (scanner.previous[1]) {
+    switch (scanner.start[1]) {
     case 'h':
       return maybeKeyword(2, 2, "is", TOKEN_THIS);
     case 'r':
@@ -213,9 +213,9 @@ Token scanToken() {
   // - at the start of the function:
   //   - scanner.current points at the next character not
   //     part of the previous token
-  //   - scanner.previous is irrelevant!
+  //   - scanner.start is irrelevant!
   // - at the end of skipWhitespace():
-  //   - scanner.previous and scanner.current point at the same char
+  //   - scanner.start and scanner.current point at the same char
   //   - that character is the next for the upcoming token
   //
   // Any time we advance, the result will be at scanner.current - 1
