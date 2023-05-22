@@ -11,6 +11,7 @@ export CFLAGS="-c"
 
 gcc -g -c -o memory.o memory.c
 gcc -g -c -o value.o value.c
+gcc -g -c -o object.o object.c
 gcc -g -c -o chunk.o chunk.c
 gcc -g -c -o vm.o vm.c
 gcc -g -c -o debug.o debug.c
@@ -22,5 +23,5 @@ ld \
 	-macos_version_min 13.3.1 -arch arm64 \
 	-L$(xcode-select -p)/SDKs/MacOSX.sdk/usr/lib -lSystem \
 	-o clox.exe \
-	main.o memory.o value.o chunk.o vm.o \
+	main.o memory.o object.o value.o chunk.o vm.o \
 	scanner.o compiler.o debug.o

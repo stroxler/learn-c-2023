@@ -42,6 +42,9 @@ void printValue(Value value) {
     // %cases.
     printf("%g", AS_NUMBER(value));
     break;
+  case VAL_OBJ:
+    fprintf(stderr, "NOT YET IMPLEMENTED: VAL_OBJ");
+    break;
   }
 }
 
@@ -73,6 +76,9 @@ bool valueEqual(Value value0, Value value1) {
     return AS_BOOL(value0) == AS_BOOL(value1);
   case VAL_NUMBER:
     return AS_NUMBER(value0) == AS_NUMBER(value1);
+  case VAL_OBJ:
+    fprintf(stderr, "NOT YET IMPLEMENTED: VAL_OBJ");
+    return false;
   default:
     fprintf(stderr, "Should be unreachable equality comparison!\n");
     return false;

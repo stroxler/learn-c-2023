@@ -3,6 +3,8 @@
 
 #include "common.h"
 #include "scanner.h"
+#include "object.h"
+#include "value.h"
 #include "chunk.h"
 
 #ifdef DEBUG_PRINT_CODE
@@ -211,6 +213,7 @@ static void expression();
 static void binary();
 static void unary();
 static void number();
+static void string();
 static void literal();
 
 
@@ -242,7 +245,7 @@ ParseRule rules[] = {
   [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_GREATER_EQUAL] = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
-  [TOKEN_STRING]        = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
   [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
@@ -344,6 +347,14 @@ static void number() {
   double value = strtod(parser.previous.start, NULL);
   emitConstant(NUMBER_VAL(value));
 }
+
+
+static void string() {
+  const char* segment_start = parser.previous.start + 1;
+  int segment_length = parser.previous.length - 2;
+  emitConstant(OBJ_VAL(createString(segment_start, segment_length)));
+}
+
 
 /* Parse an expression, consume ending ) */
 static void grouping() {
