@@ -43,4 +43,7 @@ void initScanner(const char* source);
 
 Token scanToken();
 
+
+char* tokenName(TokenType token);
+
 #endif
