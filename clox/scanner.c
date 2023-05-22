@@ -306,7 +306,7 @@ Token scanToken() {
 }
 
 
-char* tokenNames[] = {
+char* tokenTypeNames[] = {
   [TOKEN_LEFT_PAREN]    = "TOKEN_LEFT_PAREN",
   [TOKEN_RIGHT_PAREN]   = "TOKEN_RIGHT_PAREN",
   [TOKEN_LEFT_BRACE]    = "TOKEN_LEFT_BRACE",
@@ -348,6 +348,6 @@ char* tokenNames[] = {
 };
 
 
-char* tokenName(TokenType token) {
-  return tokenNames[token];
+char* tokenTypeName(TokenType token) {
+  return tokenTypeNames[token];
 }

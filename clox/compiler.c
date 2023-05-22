@@ -215,11 +215,11 @@ ParseRule rules[] = {
   [TOKEN_SLASH]         = {NULL,   binary,   PREC_FACTOR},
   [TOKEN_BANG]          = {unary,    NULL,   PREC_NONE},
   [TOKEN_BANG_EQUAL]    = {NULL,   binary,   PREC_EQUALITY},
-  [TOKEN_EQUAL]         = {NULL,   binary,   PREC_COMPARISON},
-  [TOKEN_EQUAL_EQUAL]   = {NULL,   binary,   PREC_COMPARISON},
+  [TOKEN_EQUAL_EQUAL]   = {NULL,   binary,   PREC_EQUALITY},
   [TOKEN_LESS]          = {NULL,   binary,   PREC_COMPARISON},
   [TOKEN_LESS_EQUAL]    = {NULL,   binary,   PREC_COMPARISON},
-  [TOKEN_GREATER]       = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_GREATER]       = {NULL,   binary,   PREC_COMPARISON},
+  [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_GREATER_EQUAL] = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_STRING]        = {NULL,     NULL,   PREC_NONE},
@@ -270,8 +270,8 @@ static void parsePrecedence(Precedence precedence) {
   // This should never be NULL because of the restriction that we
   // only call the function when `current` is at the start of a valid
   // expression.
-  printf("Parser.previous.type is %d\n", parser.previous.type);
   ParseFn prefix_rule = getRule(parser.previous.type)->prefix;
+  // printf("Start of parsePrecedence, parser.previous.type is %s\n", tokenTypeName(parser.previous.type));
   if (prefix_rule == NULL) {
     errorAtPrevious("Expect expression.");
     return;
@@ -280,6 +280,7 @@ static void parsePrecedence(Precedence precedence) {
   prefix_rule();
 
   while (precedence <= getRule(parser.current.type)->precedence) {
+    // printf("Infix of parsePrecedence, parser.current.type is %s\n", tokenTypeName(parser.current.type));
     advance();
     ParseFn infixRule = getRule(parser.previous.type)->infix;
     infixRule();
