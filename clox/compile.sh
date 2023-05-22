@@ -9,14 +9,14 @@
 
 export CFLAGS="-c"
 
-gcc -c -o memory.o memory.c
-gcc -c -o value.o value.c
-gcc -c -o chunk.o chunk.c
-gcc -c -o vm.o vm.c
-gcc -c -o debug.o debug.c
-gcc -c -o scanner.o scanner.c
-gcc -c -o compiler.o compiler.c
-gcc -c -o main.o main.c
+gcc -g -c -o memory.o memory.c
+gcc -g -c -o value.o value.c
+gcc -g -c -o chunk.o chunk.c
+gcc -g -c -o vm.o vm.c
+gcc -g -c -o debug.o debug.c
+gcc -g -c -o scanner.o scanner.c
+gcc -g -c -o compiler.o compiler.c
+gcc -g -c -o main.o main.c
 
 ld \
 	-macos_version_min 13.3.1 -arch arm64 \
