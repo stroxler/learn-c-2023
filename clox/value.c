@@ -44,3 +44,31 @@ void printValue(Value value) {
     break;
   }
 }
+
+
+bool valueEqual(Value value0, Value value1) {
+  // Note: the author suggests that memcmp seems like a suitable option
+  // here at least when we only have doubles and bools (that wouldn't
+  // have occurred to me!), but points out that the content of unused
+  // bits in a union is undefined - as a result, when values are
+  // actually unequal it would work fine but when they are equal we'd
+  // get nondeterministic behavior depending on a combination of the
+  // types and the random content of undefined memory locations.
+  //
+  // In addition, memcmp wouldn't work for types that hold pointers,
+  // which we will eventually need to handle.
+  if (value0.type != value1.type) {
+    return false;
+  }
+  switch (value0.type) {
+  case VAL_NIL:
+    return true;
+  case VAL_BOOL:
+    return AS_BOOL(value0) == AS_BOOL(value1);
+  case VAL_NUMBER:
+    return AS_NUMBER(value0) == AS_NUMBER(value1);
+  default:
+    fprintf(stderr, "Should be unreachable equality comparison!\n");
+    return false;
+  }
+}

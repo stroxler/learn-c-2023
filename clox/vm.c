@@ -149,6 +149,12 @@ static InterpretResult run() {
       C_BINARY_NUMERIC_OP(NUMBER_VAL, *); break;
     case OP_DIVIDE:
       C_BINARY_NUMERIC_OP(NUMBER_VAL, /); break;
+    case OP_EQUAL:
+      valueEqual(pop(), pop()); break;
+    case OP_LESS:
+      C_BINARY_NUMERIC_OP(BOOL_VAL, <); break;
+    case OP_GREATER:
+      C_BINARY_NUMERIC_OP(BOOL_VAL, >); break;
     case OP_NEGATE:
       if (!IS_NUMBER(peek(0))) {
 	runtimeError("Operand to unary - must be a number.");

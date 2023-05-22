@@ -43,6 +43,9 @@ void writeValueArray(ValueArray* array, Value value);
 void freeValueArray(ValueArray* array);
 
 void printValue(Value value);
+bool valueEqual(Value value0, Value value1);
+bool valueLess(Value value0, Value value1);
+bool valueGreater(Value value0, Value value1);
 
 
 #endif
