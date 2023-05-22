@@ -75,12 +75,6 @@ Value peek(int distance) {
 }
 
 
-static bool isFalsey(Value value) {
-  return (IS_NIL(value) ||
-	  (IS_BOOL(value) && !AS_BOOL(value)));
-}
-
-
 /* Macros for `run()`. We unset them after. */
 
 
@@ -163,7 +157,7 @@ static InterpretResult run() {
       push(NUMBER_VAL(-AS_NUMBER(pop())));
       break;
     case OP_NOT:
-      push(BOOL_VAL(isFalsey(pop()) ? true : false));
+      push(BOOL_VAL(valueFalsey(pop()) ? true : false));
       break;
     case OP_RETURN: {
       printf("\nRETURN: ");

@@ -46,6 +46,12 @@ void printValue(Value value) {
 }
 
 
+bool valueFalsey(Value value) {
+  return (IS_NIL(value) ||
+	  (IS_BOOL(value) && !AS_BOOL(value)));
+}
+
+
 bool valueEqual(Value value0, Value value1) {
   // Note: the author suggests that memcmp seems like a suitable option
   // here at least when we only have doubles and bools (that wouldn't
@@ -56,7 +62,7 @@ bool valueEqual(Value value0, Value value1) {
   // types and the random content of undefined memory locations.
   //
   // In addition, memcmp wouldn't work for types that hold pointers,
-  // which we will eventually need to handle.
+  // which we will eventually need to handle
   if (value0.type != value1.type) {
     return false;
   }
