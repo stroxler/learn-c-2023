@@ -78,8 +78,7 @@ bool valueEqual(Value value0, Value value1) {
   case VAL_NUMBER:
     return AS_NUMBER(value0) == AS_NUMBER(value1);
   case VAL_OBJ:
-    fprintf(stderr, "NOT YET IMPLEMENTED: VAL_OBJ");
-    return false;
+    return objectEqual(value0, value1);
   default:
     fprintf(stderr, "Should be unreachable equality comparison!\n");
     return false;

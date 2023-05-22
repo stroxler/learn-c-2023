@@ -46,3 +46,22 @@ void printObject(Value value) {
     break;
   }
 }
+
+
+bool objectEqual(Value value0, Value value1) {
+  if (OBJ_TYPE(value0) != OBJ_TYPE(value1)) {
+    return false;
+  }
+  switch (OBJ_TYPE(value0)) {
+  case OBJ_STRING: {
+    ObjString* string0 = AS_STRING(value0);
+    ObjString* string1 = AS_STRING(value1);
+    return (string0->length == string1->length &&
+	    memcmp(string0->chars, string1->chars, string0->length) == 0);
+  }
+  default:
+    fprintf(stderr, "Should be unreachable: unknown OBJ_TYPE in objectEqual");
+    return false;
+
+  }
+}

@@ -68,5 +68,6 @@ static inline bool isObjType(Value value, ObjType type) {
 /* Helper functions for objects. Again, these take a Value as input */
 
 void printObject(Value value);
+bool objectEqual(Value value0, Value value1);
 
 #endif
