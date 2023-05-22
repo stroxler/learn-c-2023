@@ -174,6 +174,26 @@ typedef enum {
 } Precedence;
 
 
+char* precedenceNames[] = {
+  [PREC_NONE] = "PREC_NONE",
+  [PREC_ASSIGNMENT] = "PREC_ASSIGNMENT",
+  [PREC_OR] = "PREC_OR",
+  [PREC_AND] = "PREC_AND",
+  [PREC_EQUALITY] = "PREC_EQUALITY",
+  [PREC_COMPARISON] = "PREC_COMPARISON",
+  [PREC_TERM] = "PREC_TERM",
+  [PREC_FACTOR] = "PREC_FACTOR",
+  [PREC_UNARY] = "PREC_UNARY",
+  [PREC_CALL] = "PREC_CALL",
+  [PREC_PRIMARY] = "PREC_PRIMARY",
+};
+
+
+char* precedenceName(Precedence precedence) {
+  return precedenceNames[precedence];
+}
+
+
 // pointer to a func with a `void parse_fn_name();` signature.
 typedef void (*ParseFn)();
 
@@ -267,11 +287,18 @@ static ParseRule* getRule(TokenType type) {
 static void parsePrecedence(Precedence precedence) {
   advance();
 
+  // Hang on to the start token - useful for debugging!
+  Token start_token = parser.previous;
+
+  PRINT_DEBUG("Start of parsePrecedence, parser.previous is %s (%d) / %s\n",
+              tokenTypeName(start_token.type),
+              start_token.line,
+	      precedenceName(precedence));
+
   // This should never be NULL because of the restriction that we
   // only call the function when `current` is at the start of a valid
   // expression.
-  ParseFn prefix_rule = getRule(parser.previous.type)->prefix;
-  // printf("Start of parsePrecedence, parser.previous.type is %s\n", tokenTypeName(parser.previous.type));
+  ParseFn prefix_rule = getRule(start_token.type)->prefix;
   if (prefix_rule == NULL) {
     errorAtPrevious("Expect expression.");
     return;
@@ -280,12 +307,34 @@ static void parsePrecedence(Precedence precedence) {
   prefix_rule();
 
   while (precedence <= getRule(parser.current.type)->precedence) {
-    // printf("Infix of parsePrecedence, parser.current.type is %s\n", tokenTypeName(parser.current.type));
+    PRINT_DEBUG("Infix of parsePrecedence [start = %s (%d) / %s], parser.current is %s (%d) / %s\n",
+                tokenTypeName(start_token.type),
+                start_token.line,
+	        precedenceName(precedence),
+		tokenTypeName(parser.current.type),
+		parser.current.line,
+		precedenceName(getRule(parser.current.type)->precedence));
     advance();
     ParseFn infixRule = getRule(parser.previous.type)->infix;
     infixRule();
   }
+
+  PRINT_DEBUG("End of parsePrecedence [start = %s (%d) / %s], parser.current is %s (%d) / %s\n",
+              tokenTypeName(start_token.type),
+              start_token.line,
+	      precedenceName(precedence),
+	      tokenTypeName(parser.current.type),
+	      parser.current.line,
+	      precedenceName(getRule(parser.current.type)->precedence));
 }
+
+
+static void parseRhsForOperator(TokenType operator_type) {
+  Precedence rhs_precedence = (Precedence)(getRule(operator_type)->precedence + 1);
+  parsePrecedence(rhs_precedence);
+}
+
+
 
 // Parse + compile core -----------------------------------------
 
@@ -310,12 +359,12 @@ static void binary() {
      compiled bytecode to push onto the stack) the LHS. The binary
      operation opcode is going to operate on a 2-argument stack.
 
-     So, we need to parse the RHS. We do this by bumping the
-     precedence (operators at the same precendence are
-     left-associative!), parsing starting at `current`, and only then
-     emitting the binary operation opcode. */
-  Precedence operand_min_precedence = ((Precedence)(rule->precedence + 1));
-  parsePrecedence(operand_min_precedence);
+     So, we need to parse the RHS, which we do by parsing an expression
+     with a precedence limit of one more than our current precedence; this
+     will emit the bytecode so that the stack looks like [..., LHS, RHS]
+     when our binary op bytecode runs. */
+  parseRhsForOperator(operator_type);
+
   // ^ At this point, we've output bytecode to make the stack have
   // [..., LHS, RHS] at the point where the next instruction would be
   // whatever we emit next.
@@ -381,7 +430,7 @@ static void literal() {
 static void unary() {
   TokenType operator_type = parser.previous.type;
 
-  parsePrecedence(PREC_UNARY);
+  parseRhsForOperator(operator_type);
 
   switch(operator_type) {
   case TOKEN_MINUS:
