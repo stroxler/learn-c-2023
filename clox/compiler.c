@@ -198,6 +198,9 @@ static void literal();
 //
 // The `[ENUM_VALUE] =` syntax is a way of inlining
 // enums as in indices to arrays (this is new in C99)
+//
+// I was a bit surprised but bang does indeed have ultra-low
+// precedence.
 ParseRule rules[] = {
   [TOKEN_LEFT_PAREN]    = {grouping, NULL,   PREC_NONE},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
@@ -210,7 +213,7 @@ ParseRule rules[] = {
   [TOKEN_PLUS]          = {NULL,   binary,   PREC_TERM},
   [TOKEN_STAR]          = {NULL,   binary,   PREC_FACTOR},
   [TOKEN_SLASH]         = {NULL,   binary,   PREC_FACTOR},
-  [TOKEN_BANG]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_BANG]          = {unary,    NULL,   PREC_NONE},
   [TOKEN_BANG_EQUAL]    = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EQUAL_EQUAL]   = {NULL,     NULL,   PREC_NONE},
@@ -365,6 +368,8 @@ static void unary() {
   case TOKEN_MINUS:
     emitByte(OP_NEGATE);
     break;
+  case TOKEN_BANG:
+    emitByte(OP_NOT);
   default:
     fprintf(stderr, "Should be unreachable - unknown unary op!");
     return;

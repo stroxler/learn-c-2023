@@ -263,43 +263,46 @@ Token scanToken() {
     char c = peek();
     if (c == '=') {
       advance();
-      makeToken(TOKEN_BANG_EQUAL);
+      return makeToken(TOKEN_BANG_EQUAL);
     } else {
-      makeToken(TOKEN_BANG);
+      return makeToken(TOKEN_BANG);
     }
   }
   case '=': {
     char c = peek();
     if (c == '=') {
       advance();
-      makeToken(TOKEN_EQUAL_EQUAL);
+      return makeToken(TOKEN_EQUAL_EQUAL);
     } else {
-      makeToken(TOKEN_EQUAL);
+      return makeToken(TOKEN_EQUAL);
     }
   }
   case '<': {
     char c = peek();
     if (c == '=') {
       advance();
-      makeToken(TOKEN_LESS_EQUAL);
+      return makeToken(TOKEN_LESS_EQUAL);
     } else {
-      makeToken(TOKEN_LESS);
+      return makeToken(TOKEN_LESS);
     }
   }
   case '>': {
     char c = peek();
     if (c == '=') {
       advance();
-      makeToken(TOKEN_GREATER_EQUAL);
+      return makeToken(TOKEN_GREATER_EQUAL);
     } else {
-      makeToken(TOKEN_GREATER);
+      return makeToken(TOKEN_GREATER);
     }
   }
     // Identifiers and keywords
   default:
+    printf("%c", c);
     return errorToken("NotImplementedYet");
   }
   
   // FIXME!!
   return makeToken(TOKEN_EOF);
 }
+
+

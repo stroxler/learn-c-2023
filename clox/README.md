@@ -14,17 +14,38 @@ bash compile.sh && rlwrap ./clox.exe
 
 # Development notes
 
-The macros are complex enough that it's easy to start running into
-errors that aren't obvious. As far as I can tell there's no way to
-directly get useful error messages, but you can run
+The macros are complex enough that it's easy to start running into errors that
+aren't obvious. As far as I can tell there's no way to directly get useful
+error messages, but you can run
 ```
 gcc -E problematic_file.c
 ```
-to see the preprocessor-expanded code, which is usually enough to
-figure out what the problem is. If you're still not sure, just
-pipe the output of that to a file and run gcc on *it* to get
-position information :)
+to see the preprocessor-expanded code, which is usually enough to figure out
+what the problem is. If you're still not sure, just pipe the output of that to
+a file and run gcc on *it* to get position information :)
 
-In general I found that for segfaults running the `gcc` output
-in `lldb` was pretty usable, I was able to google my way to basic
-instructions on using lldb quite easily.
+In general I found that for segfaults running the `gcc` output in `lldb` was
+pretty usable, I was able to google my way to basic instructions on using lldb
+quite easily. I was able to work out the source of several segfaults pretty
+quickly this way (usually in that case you can get pretty far from just
+figuring out the current line of code).
+
+# Precedence and Pratt Parsing
+
+Pratt parsing is a little weird to get used to, I tried to take some inline
+notes. The important thing is that the algorithm is only really related
+to the resolving of binary and unary operators where the grammar would be
+ambiguous without precedence, but it's used *everywhere*. The non-operator
+forms, including both explicitly-delimited forms like `grouping` and atomic
+forms like `number` all have prefix rules with PREC_NONE.
+
+I keep finding that "precedence" turns me around a bit. High precedence means
+tight-binding, which actually means a "low level" operation whose span in an
+expression is small. Low precedence is vice/versa, a "high-level" operation
+with a big span. The goal of precedence limits in Pratt parsing is to break
+out of tight-binding operations and unwind the stack to where we are parsing
+some looser-binding operation whenever necessary.
+
+Precedence is always set to PREC_NONE for explicitly delimited forms like
+groupings and calls, because the explicitness means that by design you can nest
+*any* expression.

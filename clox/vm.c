@@ -50,6 +50,37 @@ static void runtimeError(const char* format, ...) {
 }
 
 
+void push(Value value) {
+  // Note that if we were defensive, we'd be checking for stack
+  // overflow and underflow in push / pop. That would catch errors in
+  // our own implementation; the user stack is something separate
+  // and I'm not talking about a user-facing recursion error.
+  *vm.stack_top = value;
+  // Note that C will adjust pointer arithmetic depending on the type
+  // (with a void pointer this won't work out of the box, but here it does)
+  vm.stack_top++;
+}
+
+
+Value pop() {
+  // Recall that stack_top always points to the next *available* slot.
+  // So we can decrement first then dereference
+  vm.stack_top--;
+  return *vm.stack_top;
+}
+
+
+Value peek(int distance) {
+  return vm.stack_top[-1 - distance];
+}
+
+
+static bool isFalsey(Value value) {
+  return (IS_NIL(value) ||
+	  (IS_BOOL(value) && !AS_BOOL(value)));
+}
+
+
 /* Macros for `run()`. We unset them after. */
 
 
@@ -125,6 +156,9 @@ static InterpretResult run() {
       }
       push(NUMBER_VAL(-AS_NUMBER(pop())));
       break;
+    case OP_NOT:
+      push(BOOL_VAL(isFalsey(pop()) ? true : false));
+      break;
     case OP_RETURN: {
       printf("\nRETURN: ");
       printValue(pop());
@@ -139,31 +173,6 @@ static InterpretResult run() {
 #undef READ_CONSTANT
 #undef READ_BYTE
 #undef C_BINARY_NUMERIC_OP
-
-
-void push(Value value) {
-  // Note that if we were defensive, we'd be checking for stack
-  // overflow and underflow in push / pop. That would catch errors in
-  // our own implementation; the user stack is something separate
-  // and I'm not talking about a user-facing recursion error.
-  *vm.stack_top = value;
-  // Note that C will adjust pointer arithmetic depending on the type
-  // (with a void pointer this won't work out of the box, but here it does)
-  vm.stack_top++;
-}
-
-
-Value pop() {
-  // Recall that stack_top always points to the next *available* slot.
-  // So we can decrement first then dereference
-  vm.stack_top--;
-  return *vm.stack_top;
-}
-
-
-Value peek(int distance) {
-  return vm.stack_top[-1 - distance];
-}
 
 
 InterpretResult interpretChunk(Chunk* chunk) {
