@@ -168,7 +168,7 @@ typedef enum {
   PREC_COMPARISON,  // < <= > >=
   PREC_TERM,  // + -
   PREC_FACTOR, // *, /
-  PREC_UNARY, // !, unary -
+  PREC_NEGATION, // !, unary -
   PREC_CALL, // . ()
   PREC_PRIMARY
 } Precedence;
@@ -183,7 +183,7 @@ char* precedenceNames[] = {
   [PREC_COMPARISON] = "PREC_COMPARISON",
   [PREC_TERM] = "PREC_TERM",
   [PREC_FACTOR] = "PREC_FACTOR",
-  [PREC_UNARY] = "PREC_UNARY",
+  [PREC_NEGATION] = "PREC_NEGATION",
   [PREC_CALL] = "PREC_CALL",
   [PREC_PRIMARY] = "PREC_PRIMARY",
 };
@@ -426,7 +426,6 @@ static void literal() {
 
 
 
-/* Append an OP_NEGATE to the expression on the right side */
 static void unary() {
   TokenType operator_type = parser.previous.type;
 

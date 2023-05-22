@@ -48,4 +48,16 @@ some looser-binding operation whenever necessary.
 
 Precedence is always set to PREC_NONE for explicitly delimited forms like
 groupings and calls, because the explicitness means that by design you can nest
-*any* expression.
+*any* expression. The lowest level actual operator is bang, which also has
+PREC_NONE.
+
+One thing that's a little funny about this Pratt parser is that we set
+precedence explicitly without checking the parent precedence, which causes an
+expression like `-!8+7` to compile okay, with the `8 + 7` nested *inside* of
+the `!` which is recursively inside the unary `-`.
+
+In many language this would be a syntax error (although C allows it).  To make
+it error here we would need to track enough state to know when we've hit nested
+unary operations where the precedence decreased. That would be more work, and
+our behavior is well-defined even if it's a bit strange so we don't worry about
+it here.

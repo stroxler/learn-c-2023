@@ -157,7 +157,7 @@ static InterpretResult run() {
       C_BINARY_NUMERIC_OP(BOOL_VAL, >); break;
     case OP_NEGATE:
       if (!IS_NUMBER(peek(0))) {
-	runtimeError("Operand to unary - must be a number.");
+	runtimeError("Operand to negation must be a number.");
 	return INTERPRET_RUNTIME_ERROR;
       }
       push(NUMBER_VAL(-AS_NUMBER(pop())));
