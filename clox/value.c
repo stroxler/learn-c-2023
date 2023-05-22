@@ -2,6 +2,7 @@
 
 #include "memory.h"
 
+#include "object.h"
 #include "value.h"
 
 
@@ -43,7 +44,7 @@ void printValue(Value value) {
     printf("%g", AS_NUMBER(value));
     break;
   case VAL_OBJ:
-    fprintf(stderr, "NOT YET IMPLEMENTED: VAL_OBJ");
+    printObject(value);
     break;
   }
 }

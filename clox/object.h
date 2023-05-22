@@ -62,7 +62,11 @@ static inline bool isObjType(Value value, ObjType type) {
 
 
 #define AS_STRING(value) ((ObjString*)AS_OBJ(value))
-#define AS_CSTRING(value) ((ObjString*)AS_OBJ(value)->chars)
+#define AS_CSTRING(value) (((ObjString*)AS_OBJ(value))->chars)
 
+
+/* Helper functions for objects. Again, these take a Value as input */
+
+void printObject(Value value);
 
 #endif

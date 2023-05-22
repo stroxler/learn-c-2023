@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "memory.h"
@@ -33,6 +34,15 @@ ObjString* allocateString(char* chars, int length) {
 ObjString* createString(const char* segment_start, int length) {
   char* chars = ALLOCATE(char, length + 1);
   memcpy(chars, segment_start, length);
-  chars[length - 1] = '\0';
+  chars[length] = '\0';
   return allocateString(chars, length);
+}
+
+
+void printObject(Value value) {
+  switch (OBJ_TYPE(value)) {
+  case OBJ_STRING:
+    printf("\"%s\"", AS_CSTRING(value));
+    break;
+  }
 }

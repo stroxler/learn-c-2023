@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// #define PRINT_DEBUGGING
+//#define PRINT_DEBUGGING
 #ifdef PRINT_DEBUGGING
 #define PRINT_DEBUG(...) printf(__VA_ARGS__)
 #else

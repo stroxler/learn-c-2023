@@ -113,12 +113,17 @@ static Token number() {
 
 
 static Token string() {
-  for (;;) {
-    if (peek() == '"') {
-      return makeToken(TOKEN_STRING);
+  while (!(isAtEnd() || peek() == '"')) {
+    if (peek() == '\n') {
+      scanner.line++;
     }
     advance();
   }
+  if (isAtEnd()) {
+    return errorToken("Unterminated string.");
+  }
+  advance(); // consume the closing quote
+  return makeToken(TOKEN_STRING);
 }
 
 
