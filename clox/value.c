@@ -30,7 +30,17 @@ void freeValueArray(ValueArray* array) {
 
 
 void printValue(Value value) {
-  // %g is a "smart" formatter that uses scientific notation in some
-  // %cases.
-  printf("%g", AS_NUMBER(value));
+  switch (value.type) {
+  case VAL_BOOL:
+    printf(AS_BOOL(value) ? "true" : "false");
+    break;
+  case VAL_NIL:
+    printf("nil");
+    break;
+  case VAL_NUMBER:
+    // %g is a "smart" formatter that uses scientific notation in some
+    // %cases.
+    printf("%g", AS_NUMBER(value));
+    break;
+  }
 }

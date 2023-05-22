@@ -191,6 +191,7 @@ static void expression();
 static void binary();
 static void unary();
 static void number();
+static void literal();
 
 
 // Array of ParseRules to handle binary infix parsing.
@@ -223,17 +224,17 @@ ParseRule rules[] = {
   [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_FALSE]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
   [TOKEN_FOR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_NIL]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
   [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_TRUE]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_TRUE]          = {literal,  NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
 };
@@ -266,6 +267,7 @@ static void parsePrecedence(Precedence precedence) {
   // This should never be NULL because of the restriction that we
   // only call the function when `current` is at the start of a valid
   // expression.
+  printf("Parser.previous.type is %d\n", parser.previous.type);
   ParseFn prefix_rule = getRule(parser.previous.type)->prefix;
   if (prefix_rule == NULL) {
     errorAtPrevious("Expect expression.");
@@ -328,10 +330,29 @@ static void binary() {
     emitByte(OP_DIVIDE);
     break;
   default:
-    fprintf(stderr, "Should be unreachable - unknown binary op!");
+    fprintf(stderr, "should be unreachable - unknown binary op!");
     return;
   }
 }
+
+
+static void literal() {
+  switch (parser.previous.type) {
+  case TOKEN_FALSE:
+    emitByte(OP_FALSE);
+    break;
+  case TOKEN_NIL:
+    emitByte(OP_NIL);
+    break;
+  case TOKEN_TRUE:
+    emitByte(OP_TRUE);
+    break;
+  default:
+    fprintf(stderr, "should be unreachable - unknown literal!");
+    return;
+  }
+}
+
 
 
 /* Append an OP_NEGATE to the expression on the right side */

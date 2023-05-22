@@ -159,9 +159,9 @@ static TokenType identifierOrKeywordType() {
   case 'f':
     switch (scanner.start[1]) {
     case 'a':
-      return maybeKeyword(2, 3, "lse", TOKEN_FOR);
+      return maybeKeyword(2, 3, "lse", TOKEN_FALSE);
     case 'o':
-      return maybeKeyword(2, 1, "r", TOKEN_FALSE);
+      return maybeKeyword(2, 1, "r", TOKEN_FOR);
     case 'u':
       return maybeKeyword(2, 1, "n", TOKEN_FUN);
     default:
