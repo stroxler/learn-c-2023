@@ -150,7 +150,7 @@ static InterpretResult run() {
     case OP_DIVIDE:
       C_BINARY_NUMERIC_OP(NUMBER_VAL, /); break;
     case OP_EQUAL:
-      valueEqual(pop(), pop()); break;
+      push(BOOL_VAL(valueEqual(pop(), pop()))); break;
     case OP_LESS:
       C_BINARY_NUMERIC_OP(BOOL_VAL, <); break;
     case OP_GREATER:
