@@ -333,7 +333,7 @@ static void binary() {
     emitByte(OP_DIVIDE);
     break;
   default:
-    fprintf(stderr, "should be unreachable - unknown binary op!");
+    fprintf(stderr, "should be unreachable - unknown binary op!\n");
     return;
   }
 }
@@ -351,7 +351,7 @@ static void literal() {
     emitByte(OP_TRUE);
     break;
   default:
-    fprintf(stderr, "should be unreachable - unknown literal!");
+    fprintf(stderr, "should be unreachable - unknown literal!\n");
     return;
   }
 }
@@ -371,7 +371,7 @@ static void unary() {
   case TOKEN_BANG:
     emitByte(OP_NOT);
   default:
-    fprintf(stderr, "Should be unreachable - unknown unary op!");
+    fprintf(stderr, "Should be unreachable - unknown unary op!\n");
     return;
   }
 }
@@ -383,6 +383,14 @@ static void expression() {
 
 
 // Api to compile a chunk ---------------------------------------
+
+
+void initParser(Chunk* chunk, const char* source) {
+  initScanner(source);
+  parser.hadError = false;
+  parser.hadErrorSinceSynchronize = false;
+  compilingChunk = chunk;
+}
 
 
 static void finalizeChunk() {
@@ -397,14 +405,12 @@ static void finalizeChunk() {
 }
 
 
-
 bool compile(Chunk* chunk, const char* source) {
-  initScanner(source);
+  initParser(chunk, source);
+
   // // debug hook:
   // showTokens();
   // return false;
-
-  compilingChunk = chunk;
 
   advance();
   expression();
