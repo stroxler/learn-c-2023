@@ -389,8 +389,11 @@ static void unary() {
     break;
   case TOKEN_BANG:
     emitByte(OP_NOT);
+    break;
   default:
-    fprintf(stderr, "Should be unreachable - unknown unary op!\n");
+    fprintf(stderr,
+	    "Should be unreachable - unknown unary op %s\n",
+	    tokenTypeName(operator_type));
     return;
   }
 }
