@@ -4,6 +4,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
+#include "object.h"
 
 #include "vm.h"
 
@@ -135,8 +136,17 @@ static InterpretResult run() {
       push(BOOL_VAL(false)); break;
     case OP_TRUE:
       push(BOOL_VAL(true)); break;
-    case OP_ADD:
-      C_BINARY_NUMERIC_OP(NUMBER_VAL, +); break;
+    case OP_ADD: {
+      // Unlike most other ops, OP_ADD is polymorphic over numbers and strings
+      if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
+	Value right = pop();
+	Value left = pop();
+	push(concatenateStrings(left, right));
+      } else {
+	C_BINARY_NUMERIC_OP(NUMBER_VAL, +);
+      }
+      break;
+    }
     case OP_SUBTRACT:
       C_BINARY_NUMERIC_OP(NUMBER_VAL, -); break;
     case OP_MULTIPLY:

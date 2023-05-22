@@ -65,3 +65,20 @@ bool objectEqual(Value value0, Value value1) {
 
   }
 }
+
+
+Value concatenateStrings(Value left, Value right) {
+  ObjString* lstr = AS_STRING(left);
+  ObjString* rstr = AS_STRING(right);
+
+  int length = lstr->length + rstr->length;
+  char* chars = ALLOCATE(char, length + 1);
+  memcpy(chars, lstr->chars, lstr->length);
+  memcpy(chars + lstr->length, rstr->chars, rstr->length);
+  chars[length] = '\0';
+
+  // Wrap the chars in a string struct, and return a Value pointing to it.
+  ObjString* string = allocateString(chars, length);
+  Value value = OBJ_VAL(string);
+  return value;
+}

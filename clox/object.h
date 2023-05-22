@@ -58,7 +58,7 @@ static inline bool isObjType(Value value, ObjType type) {
 }
 
 
-#define IS_STRING(value) (isObjType(value, OBJ_STRING)
+#define IS_STRING(value) (isObjType(value, OBJ_STRING))
 
 
 #define AS_STRING(value) ((ObjString*)AS_OBJ(value))
@@ -69,5 +69,6 @@ static inline bool isObjType(Value value, ObjType type) {
 
 void printObject(Value value);
 bool objectEqual(Value value0, Value value1);
+Value concatenateStrings(Value left, Value right);
 
 #endif
