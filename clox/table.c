@@ -41,6 +41,7 @@ ObjString* tableFindString(Table* strings, const char*
 	       memcmp(entry->key->chars, chars, length) == 0) {
       return entry->key;
     }
+    index = (index + 1) % strings->capacity;
   }
 }
 
@@ -104,16 +105,16 @@ void adjustCapacity(Table* table, int capacity) {
   // Note that we skip tombstones, and so we want to reset the count.
   table->count = 0;
   for (int i = 0; i < table->capacity; i++) {
-    Entry* entry = &entries[i];
-    if ((entry->key) != NULL) {
-      Entry* dest = findEntry(entries, capacity, entry->key);
-      dest->key = entry->key;
-      dest->value = entry->value;
+    Entry* source = &table->entries[i];
+    if ((source->key) != NULL) {
+      Entry* dest = findEntry(entries, capacity, source->key);
+      dest->key = source->key;
+      dest->value = source->value;
       table->count++;
     }
   }
   // free the old entries' memory
-  FREE_ARRAY(Entry, entries, table->capacity);
+  FREE_ARRAY(Entry, table->entries, table->capacity);
   // only now overwrite the existing table data
   table->entries = entries;
   table->capacity = capacity;
@@ -178,7 +179,7 @@ bool tableDelete(Table* table, ObjString* key) {
 
 void tableAddAll(Table* from, Table* to) {
   for (int i = 0; i < from->capacity; i++) {
-    Entry* entry = &to->entries[i];
+    Entry* entry = &from->entries[i];
     if ((entry->key) != NULL) {
       tableSet(to, entry->key, entry->value);
     }

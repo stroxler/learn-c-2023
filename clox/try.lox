@@ -4,3 +4,5 @@ print 15 + 1;
 
 print (7 - 5) / 2 == 1;
 
+var x = "value of x";
+print "can't print x yet :(";

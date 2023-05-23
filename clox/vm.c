@@ -44,6 +44,7 @@ static void resetStack() {
 void initVM() {
   resetStack();
   initTable(&vm.strings);
+  initTable(&vm.globals);
 }
 
 static void runtimeError(const char* format, ...) {
@@ -102,6 +103,9 @@ Value peek(int distance) {
 
 
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+
+
+#define READ_STRING() AS_STRING(READ_CONSTANT())
 
 
 // Expand a C binary op into a stack operation.
@@ -198,6 +202,22 @@ static InterpretResult run() {
       pop();
       break;
     }
+    case OP_DEFINE_GLOBAL: {
+      ObjString* name = READ_STRING();
+      // Why do we peek and only then pop?
+      //
+      // Any time a value is ephemeral, i.e. used in the interpreter
+      // loop (so any operation that consumes values), we can pop
+      // freely. But if the value we are popping will continue to be live
+      // in the program we have to be careful in case GC is triggered.
+      //
+      // As a result, we need to make sure the value is in globals *before*
+      // we remove it from the stack since the GC will check both places
+      // but it can't check values that are only accessible from raw C code.
+      tableSet(&vm.globals, name, peek(0));
+      pop();
+      break;
+    }
     case OP_RETURN: {
       return INTERPRET_OK;
       break;
@@ -207,6 +227,7 @@ static InterpretResult run() {
 }
 
 /* unset the macros that are for use in `run` */
+#undef READ_STRING
 #undef READ_CONSTANT
 #undef READ_BYTE
 #undef C_BINARY_NUMERIC_OP
@@ -246,5 +267,6 @@ void freeObjects() {
 
 void freeVM() {
   freeObjects();
+  freeTable(&vm.globals);
   freeTable(&vm.strings);
 }

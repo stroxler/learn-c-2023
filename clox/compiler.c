@@ -506,6 +506,39 @@ static void statement() {
 }
 
 
+static uint8_t identifierConstant(Token* name) {
+  return makeConstant(OBJ_VAL(createString(name->start, name->length)));
+}
+
+
+uint8_t parseVariable(const char* error_message) {
+  consume(TOKEN_IDENTIFIER, error_message);
+  return identifierConstant(&parser.previous);
+}
+
+
+void defineVariable(uint8_t global) {
+  emit2Bytes(OP_DEFINE_GLOBAL, global);
+}
+  
+
+static void varDeclaration() {
+  // Push the global name onto the stack (which, in the process, adds
+  // the value to chunk.constants and the underlying ObjString* to
+  // vm.strings).
+  uint8_t global = parseVariable("Expect variable name.");
+  // Push the initial value on the stack - nil if no assignment
+  if (match(TOKEN_EQUAL)) {
+    expression();
+  } else {
+    emitByte(OP_NIL);
+  }
+  // Consume the statement end and emit the bytecode to load the value.
+  consume(TOKEN_SEMICOLON, "Expect ';' after var declaration.");
+  defineVariable(global);
+}
+
+
 /* Attempt to recover at likely statement boundaries boundaries */
 static void synchronize() {
   while (parser.current.type != TOKEN_EOF) {
@@ -533,7 +566,11 @@ static void synchronize() {
 
 
 static void declaration() {
-  statement();
+  if (match(TOKEN_VAR)) {
+    varDeclaration();
+  } else {
+    statement();
+  }
 
   if (parser.hadErrorSinceSynchronize) {
     synchronize();

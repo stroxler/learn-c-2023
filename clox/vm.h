@@ -20,6 +20,7 @@ typedef struct {
   // heap data
   Obj* objects;
   Table strings;
+  Table globals;
 } VM;
 
 
