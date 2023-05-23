@@ -1,15 +1,16 @@
-(7 + 8) / 5;
-
-print 15 + 1;
-
-print (7 - 5) / 2 == 1;
-
 var x = "initial value of x";
 print x;
 
 x = "new value of x";
-
-
-8 + 7 = 9;
-
 print x;
+
+{
+    var y = "value of y";
+    {
+      print y;
+      var y = "shadows y, which was originally " + y;
+      print y;
+    }
+    print "outside inner block, y is " + y;
+}
+

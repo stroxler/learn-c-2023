@@ -23,13 +23,21 @@ int simpleInstruction(const char* name, int offset) {
   return offset + 1;
 }
 
-int constantInstruction(const char*name, Chunk* chunk, int offset) {
+int constantInstruction(const char* name, Chunk* chunk, int offset) {
   // opcode should be left-justified with 16 columns of space
   // the constant prints as it's index plus (in single quotes) the value.
   uint8_t constant_index = chunk->code[offset + 1];
   printf("%-16s %4d '", name, constant_index);
   printValue(chunk->constants.values[constant_index]);
   printf("'\n");
+  return offset + 2;
+}
+
+
+int byteInstruction(const char* name, Chunk* chunk, int offset) {
+  // opcode should be left-justified with 16 columns of space
+  uint8_t stack_index = chunk->code[offset + 1];
+  printf("%-16s %4d\n", name, stack_index);
   return offset + 2;
 }
 
@@ -55,6 +63,10 @@ int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
     return constantInstruction("OP_GET_GLOBAL", chunk, offset);
   case OP_SET_GLOBAL:
     return constantInstruction("OP_SET_GLOBAL", chunk, offset);
+  case OP_GET_LOCAL:
+    return byteInstruction("OP_GET_LOCAL", chunk, offset);
+  case OP_SET_LOCAL:
+    return byteInstruction("OP_SET_LOCAL", chunk, offset);
   case OP_NIL:
     return simpleInstruction("OP_NIL", offset);
   case OP_FALSE:

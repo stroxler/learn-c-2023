@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "common.h"
 #include "scanner.h"
@@ -13,8 +14,27 @@
 
 #include "compiler.h"
 
+// The compiler is a global, defined per compile unit ------
 
-// Viewing scanner output (debugging only) -----------
+
+typedef struct{
+  Token name;
+  int depth;
+} Local;
+
+
+typedef struct {
+  Local locals[UINT8_COUNT];
+  int localCount;
+  int scopeDepth;
+} Compiler;
+
+
+Compiler* currentCompiler = NULL;
+
+
+// Viewing scanner output (debugging only) -----------------
+
 
 void showTokens() {
   int line = -1;
@@ -34,7 +54,7 @@ void showTokens() {
 }
 
 
-// Parsing utility logic --------------------------------
+// Parsing utility logic ------------------------------------
 
 
 typedef struct {
@@ -389,6 +409,12 @@ static void parseRhsForOperator(TokenType operator_type) {
 // Parse + compile core -----------------------------------------
 
 
+static bool identifiersEqual(Token* a, Token* b) {
+  return (a->length == b->length &&
+	  memcmp(a->start, b->start, a->length) == 0);
+}
+
+
 static uint8_t identifierConstant(Token* name) {
   return makeConstant(OBJ_VAL(createString(name->start, name->length)));
 }
@@ -487,6 +513,23 @@ static void literal(bool canAssign) {
 }
 
 
+static int resolveLocal(Compiler* compiler, Token* name) {
+  // Scan backward (across all lexical scopes except global)
+  // for any local var with this name, taking first hit.
+  for (int i = compiler->localCount - 1; i >=0; i--) {
+    Local* local = &compiler->locals[i];
+    // NOTE: I diverge from clox here in that I allow a var to use
+    // a shadowed var in its own initializer (why? Ocaml does!)
+    if (local->depth != -1 && identifiersEqual(name, &local->name)) {
+      return i;
+    }
+  }
+  // If there's no hit, return -1 as a sentinel telling the
+  // compiler to try a global lookup instead.
+  return -1;
+}
+
+
 /* `canAssign` is a precedence-checking hack, specifically needed
    because we can't treat `=` as a Pratt infix operator...
 
@@ -500,23 +543,34 @@ static void literal(bool canAssign) {
      the expression and add it to the stack.
 */
 static void namedVariable(Token* name, bool canAssign) {
-  // Note that although we'll get duplicate Values in the constants
-  // for different instances of the same name in the AST, the
-  // underlying strings will be shared due to string interning.
-  uint8_t arg = identifierConstant(name);
+  int local_index = resolveLocal(currentCompiler, name);
+
+  // Determine whether to use a local or global op. The arg
+  // is an int either way, but the meaning is different: it's an
+  // index into constants for globals, vs a stack index for locals.
+  uint8_t getOp, setOp, arg;
+  if (local_index == -1) {
+    getOp = OP_GET_GLOBAL;
+    setOp = OP_SET_GLOBAL;
+    arg = identifierConstant(name);
+  } else {
+    getOp = OP_GET_LOCAL;
+    setOp = OP_SET_LOCAL;
+    arg = (uint8_t)local_index;
+  }
+
   // For bare variables, we can decide get vs set with a simple match
   if (canAssign && match(TOKEN_EQUAL)) {
     expression();  // evaluate the assignment RHS, put it on the stack
-    emit2Bytes(OP_SET_GLOBAL, arg);  // (it will stay on the stack)
+    emit2Bytes(setOp, arg);  // (it will stay on the stack)
   } else {
-    emit2Bytes(OP_GET_GLOBAL, arg);
+    emit2Bytes(getOp, arg);
   }
 }
 
 static void variable(bool canAssign) {
   namedVariable(&parser.previous, canAssign); // note: the book passes by value here
 }
-
 
 
 static void unary(bool canAssign) {
@@ -559,23 +613,125 @@ static void printStatement() {
 }
 
 
+static void beginScope() {
+  // Bump scope depth. Nothing else needs doing.
+  currentCompiler->scopeDepth++;
+}
+
+
+static void endScope() {
+  // Decrement sope depth.
+  currentCompiler->scopeDepth--;
+  // But also clear out locals, at both:
+  // - static analysis type (by decrementing the localCount)
+  // - runtime (by emitting bytecode that pops all locals going out of
+  //   scope)
+  int outer_scope_depth = currentCompiler->scopeDepth;
+  while(currentCompiler->localCount > 0 &&
+	(currentCompiler->locals[currentCompiler->localCount - 1].depth
+	 > outer_scope_depth)) {
+    currentCompiler->localCount--;
+    emitByte(OP_POP);
+  }
+}
+
+
+static void block() {
+  beginScope();
+  while (!(check(TOKEN_RIGHT_BRACE) || check(TOKEN_EOF))) {
+    declaration();
+  }
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
+  endScope();
+}
+
+
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_LEFT_BRACE)) {
+    block();
   } else {
     expressionStatement();
   }
 }
 
 
-uint8_t parseVariable(const char* error_message) {
-  consume(TOKEN_IDENTIFIER, error_message);
-  return identifierConstant(&parser.previous);
+static void addLocal(Token name) {
+  if (currentCompiler->localCount == UINT8_COUNT) {
+    errorAtPrevious("Too many local variables in function.");
+    return;
+  }
+  // Get the next free local slot
+  Local* local = &currentCompiler->locals[currentCompiler->localCount++];
+  local->name = name;
+  local->depth = -1; // we'll soon set it to `currentCompiler->scopeDepth`
 }
 
 
-void defineVariable(uint8_t global) {
-  emit2Bytes(OP_DEFINE_GLOBAL, global);
+void addLocalToScope() { // NOTE: the book calls this `declareVariable`
+  Token* name = &parser.previous;
+
+  // Check that we don't try to define the same variable twice
+  // in the same scope
+  for (int i = currentCompiler->localCount - 1; i >= 0; i--) {
+    Local* local = &currentCompiler->locals[i];
+    // The -1 here is a sentinel value that causes us to skip a newly declared
+    // but not-yet defined local shadowing some parent scope. This is important
+    // when we want to use the shadowed variable inside of the initializing
+    // expression, e.g. `var x = 1; { var x = x + 1; }`
+    if (local->depth != -1 && local->depth < currentCompiler->scopeDepth) {
+      // (stop checking - we've backtracked to some parent scope and
+      // shadowing is okay)
+      //
+      // I think the -1 is for parameters or captures or both,
+      // although it's as-yet unexplained.
+      break;
+    }
+    if (identifiersEqual(name, &local->name)) {
+      errorAtPrevious("A variable of this name is already defined in the same scope");
+    }
+  }
+
+  addLocal(*name);
+}
+
+
+uint8_t parseVariableInDeclaration(const char* error_message) {
+  consume(TOKEN_IDENTIFIER, error_message);
+  // For globals and locals we do different things:
+  //
+  // - When we hit a global declaration, we emit code to push the name
+  //   so we can use it in OP_GLOBAL
+  // - When we hit a local declaration, we don't have to emit anything
+  //   but we do need to track the variable in our scope (the "resolver"
+  //   logic in jlox terms)
+  //
+  // We return 0 as a placeholder for the constant to push in the local
+  // case; the downstream code in defineVariable will ignore this.
+  if (currentCompiler->scopeDepth == 0) {
+    return identifierConstant(&parser.previous);
+  } else {
+    addLocalToScope();
+    return 0;
+  }
+}
+
+
+void defineVariable(uint8_t maybe_global) {
+  if (currentCompiler->scopeDepth == 0) {
+    emit2Bytes(OP_DEFINE_GLOBAL, maybe_global);
+  } else {
+    // For locals, we don't need to emit any opcode here. We already
+    // emitted the byetocde for the RHS inside varDeclaration, and
+    // we *didn't* emit anything in parseVariable, so our new local
+    // is already on top of the stack.
+    //
+    // But we do need to mark the local as reachable only *after*
+    // resolving the bytecode for any initializing instruction.
+    Local* local = &currentCompiler->locals[currentCompiler->localCount - 1];
+    local->depth = currentCompiler->scopeDepth;
+  }
 }
   
 
@@ -583,7 +739,7 @@ static void varDeclaration() {
   // Push the global name onto the stack (which, in the process, adds
   // the value to chunk.constants and the underlying ObjString* to
   // vm.strings).
-  uint8_t global = parseVariable("Expect variable name.");
+  uint8_t maybe_global = parseVariableInDeclaration("Expect variable name.");
   // Push the initial value on the stack - nil if no assignment
   if (match(TOKEN_EQUAL)) {
     expression();
@@ -592,7 +748,7 @@ static void varDeclaration() {
   }
   // Consume the statement end and emit the bytecode to load the value.
   consume(TOKEN_SEMICOLON, "Expect ';' after var declaration.");
-  defineVariable(global);
+  defineVariable(maybe_global);
 }
 
 
@@ -646,6 +802,13 @@ void initParser(Chunk* chunk, const char* source) {
 }
 
 
+void initCompiler(Compiler* compiler) {
+  compiler->localCount = 0;
+  compiler->scopeDepth = 0;
+  currentCompiler = compiler;
+}
+
+
 static void finalizeChunk() {
   // For the moment, inject a return after we compile an expression.
   // The line number will match the end of the expression.
@@ -660,6 +823,8 @@ static void finalizeChunk() {
 
 bool compile(Chunk* chunk, const char* source) {
   initParser(chunk, source);
+  Compiler compiler;  // (note this is stack allocated, it goes out of scope at func end)
+  initCompiler(&compiler);
 
   // // debug hook:
   // showTokens();

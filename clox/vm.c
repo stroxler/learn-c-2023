@@ -238,6 +238,21 @@ static InterpretResult run() {
       }
       break;
     }
+    case OP_SET_LOCAL: {
+      // One thing that seems weird here is that we never allocate a
+      // slot for any opcode. That's because there *is* no opcode for
+      // actually defining a local - we just push the value ot the stack!
+      //
+      // This opcode is only used when setting an already-existant local.
+      uint8_t slot = READ_BYTE();
+      vm.stack[slot] = peek(0);
+      break;
+    }
+    case OP_GET_LOCAL: {
+      uint8_t slot = READ_BYTE();
+      push(vm.stack[slot]);
+      break;
+    }
     case OP_RETURN: {
       return INTERPRET_OK;
       break;
