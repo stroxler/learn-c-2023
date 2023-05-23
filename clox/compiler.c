@@ -483,8 +483,20 @@ static void expression() {
 }
 
 
-static void statement() {
+static void printStatement() {
   expression();
+  consume(TOKEN_SEMICOLON, "Expect ';' after value in print statement");
+  emitByte(OP_PRINT);
+}
+
+
+static void statement() {
+  if (match(TOKEN_PRINT)) {
+    printStatement();
+  } else {
+    fprintf(stderr, "Compiling throw-away expression");
+    expression();
+  }
 }
 
 
