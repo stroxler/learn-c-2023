@@ -506,8 +506,38 @@ static void statement() {
 }
 
 
+/* Attempt to recover at likely statement boundaries boundaries */
+static void synchronize() {
+  while (parser.current.type != TOKEN_EOF) {
+    if (parser.previous.type == TOKEN_SEMICOLON) {
+      // If the next token is a valid declaration start, reset state to keep going
+      switch(parser.current.type) {
+      case TOKEN_CLASS:
+      case TOKEN_FUN:
+      case TOKEN_VAR:
+      case TOKEN_FOR:
+      case TOKEN_IF:
+      case TOKEN_WHILE:
+      case TOKEN_PRINT:
+      case TOKEN_RETURN: {
+	parser.hadErrorSinceSynchronize = false;
+	return;
+      }
+      default:
+	;
+      }
+    }
+    advance();
+  }
+}
+
+
 static void declaration() {
   statement();
+
+  if (parser.hadErrorSinceSynchronize) {
+    synchronize();
+  }
 }
 
 
