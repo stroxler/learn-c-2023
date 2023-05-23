@@ -3,8 +3,10 @@
 
 #include "memory.h"
 #include "value.h"
+#include "vm.h"
 
 #include "object.h"
+
 
 static Obj* allocateObject(size_t size, ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
@@ -12,14 +14,36 @@ static Obj* allocateObject(size_t size, ObjType type) {
   return object;
 }
 
+
 #define ALLOCATE_OBJ(type, objectType) \
   (type*)allocateObject(sizeof(type), objectType)
-  
+
+
+Table interned_strings;
+
+
+/* Implement FNV-1a hash */
+uint32_t hashChars(const char* key, int length) {
+  uint32_t hash = 2166136261u;
+  for (int i = 0; i < length; i++) {
+    hash ^= (uint8_t) key[i];
+    hash *= 16777619;
+  }
+  return hash;
+}
+
 
 ObjString* allocateString(char* chars, int length) {
-  ObjString* string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
-  string->chars = chars;
-  string->length = length;
+  uint32_t hash = hashChars(chars, length);
+  ObjString* string = vmFindInternedString(chars, length, hash);
+  if (string == NULL) {
+    string = ALLOCATE_OBJ(ObjString, OBJ_STRING);
+    string->chars = chars;
+    string->length = length;
+    string->hash = hashChars(chars, length);
+    vmInsertObjectIntoHeap((Obj*)string);
+    vmAddInternedString(string);
+  }
   return string;
 }
 
@@ -54,10 +78,9 @@ bool objectEqual(Value value0, Value value1) {
   }
   switch (OBJ_TYPE(value0)) {
   case OBJ_STRING: {
-    ObjString* string0 = AS_STRING(value0);
-    ObjString* string1 = AS_STRING(value1);
-    return (string0->length == string1->length &&
-	    memcmp(string0->chars, string1->chars, string0->length) == 0);
+    // This works because of string interning - the comparison
+    // work is done upfront in tableFindString.
+    return AS_STRING(value0) == AS_STRING(value1);
   }
   default:
     fprintf(stderr, "Should be unreachable: unknown OBJ_TYPE in objectEqual");
@@ -81,4 +104,16 @@ Value concatenateStrings(Value left, Value right) {
   ObjString* string = allocateString(chars, length);
   Value value = OBJ_VAL(string);
   return value;
+}
+
+
+void freeObject(Obj* object) {
+  switch (object->type) {
+  case OBJ_STRING: {
+    ObjString* string = (ObjString*) object;
+    FREE_ARRAY(char, string->chars, string->length + 1);
+    FREE(ObjString, string);
+    break;
+  }
+  }
 }

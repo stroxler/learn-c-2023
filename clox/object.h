@@ -2,7 +2,9 @@
 #define clox_object_h
 
 #include "common.h"
+#include "memory.h"
 #include "value.h"
+#include "vm.h"
 
 
 typedef enum {
@@ -28,6 +30,7 @@ typedef enum {
 // Note the non-typedef form here - the typedef was a forward declaration in value.h
 struct Obj {
   ObjType type;
+  Obj* next;  // objects form a linked list so the vm can keep track of all heap data
 };
 
 
@@ -37,6 +40,7 @@ struct ObjString {
   Obj obj;
   int length;
   char* chars;
+  uint32_t hash;
 };
 
 
@@ -70,5 +74,11 @@ static inline bool isObjType(Value value, ObjType type) {
 void printObject(Value value);
 bool objectEqual(Value value0, Value value1);
 Value concatenateStrings(Value left, Value right);
+
+/* Helper function for the VM to garbage collect objects.
+
+   Note that this does *not* take a Value, because it is a heap-only
+   action and only the Obj part of an object value is on the heap */
+void freeObject(Obj* object);
 
 #endif

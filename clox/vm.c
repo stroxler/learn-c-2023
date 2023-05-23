@@ -5,6 +5,7 @@
 #include "compiler.h"
 #include "debug.h"
 #include "object.h"
+#include "table.h"
 
 #include "vm.h"
 
@@ -16,6 +17,23 @@
 VM vm;
 
 
+void vmInsertObjectIntoHeap(Obj* object) {
+  object->next = vm.objects;
+  vm.objects = object;
+}
+
+
+bool vmAddInternedString(ObjString* string) {
+  return tableSet(&vm.strings, string, NIL_VAL);
+}
+
+
+ObjString* vmFindInternedString(const char* chars, int length, uint32_t hash) {
+  return tableFindString(&vm.strings, chars, length, hash);
+}
+			 
+
+
 static void resetStack() {
   // no nead to actually clear the stack, just reset pointer. This
   // works because the stack is not a pointer but a plain array, inlined
@@ -25,6 +43,7 @@ static void resetStack() {
 
 void initVM() {
   resetStack();
+  initTable(&vm.strings);
 }
 
 static void runtimeError(const char* format, ...) {
@@ -208,5 +227,16 @@ InterpretResult interpret(const char* source) {
 }
 
 
+void freeObjects() {
+  Obj* object = vm.objects;
+  while (object != NULL) {
+    Obj* next = object->next;
+    freeObject(object);
+    object = next;
+  }
+}
+
 void freeVM() {
+  freeObjects();
+  freeTable(&vm.strings);
 }

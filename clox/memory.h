@@ -21,4 +21,6 @@ void* reallocate(void* pointer, size_t old_size, size_t new_size);
 #define ALLOCATE(type, size) \
   reallocate(NULL, 0, sizeof(type) * size)
 
+#define FREE(type, pointer) reallocate(pointer, sizeof(type), 0)
+
 #endif

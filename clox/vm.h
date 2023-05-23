@@ -1,8 +1,10 @@
 #ifndef clox_vm_h
 #define clox_vm_h
 
+#include "object.h"
 #include "value.h"
 #include "chunk.h"
+#include "table.h"
 
 
 #define STACK_MAX 256
@@ -15,7 +17,18 @@ typedef struct {
   // value stack
   Value stack[STACK_MAX];
   Value* stack_top;
+  // heap data
+  Obj* objects;
+  Table strings;
 } VM;
+
+
+// This is exposed so that object.c can use it.
+void vmInsertObjectIntoHeap(Obj *object);
+bool vmAddInternedString(ObjString* string);
+ObjString* vmFindInternedString(const char* chars,
+   			        int length, uint32_t hash);
+
 
 
 typedef enum {

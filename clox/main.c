@@ -6,6 +6,7 @@
 
 #include "common.h"
 #include "chunk.h"
+#include "table.h"
 #include "vm.h"
 #include "debug.h"
 
