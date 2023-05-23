@@ -75,6 +75,10 @@ int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
     return simpleInstruction("OP_NEGATE", offset);
   case OP_NOT:
     return simpleInstruction("OP_NOT", offset);
+  case OP_POP:
+    return simpleInstruction("OP_POP", offset);
+  case OP_PRINT:
+    return simpleInstruction("OP_PRINT", offset);
   default:
     printf("Unknown opcode %d\n", instruction);
     return offset + 1;
