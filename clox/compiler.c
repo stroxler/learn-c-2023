@@ -78,6 +78,7 @@ static void errorAtCurrent(const char* message) {
   errorAt(&parser.previous, message);
 }
 
+
 static void advance() {
   parser.previous = parser.current;
 
@@ -111,6 +112,21 @@ static void consume(TokenType type, const char* message) {
     advance();
   } else {
     errorAtCurrent(message);
+  }
+}
+
+
+static bool check(TokenType type) {
+  return parser.current.type == type;
+}
+
+
+static bool match(TokenType type) {
+  if (check(type)) {
+    advance();
+    return true;
+  } else {
+    return false;
   }
 }
 
@@ -208,8 +224,10 @@ typedef struct {
 
 
 // Forward declarations of parsing functions
-static void grouping();
+static void declaration();
+static void statement();
 static void expression();
+static void grouping();
 static void binary();
 static void unary();
 static void number();
@@ -465,6 +483,16 @@ static void expression() {
 }
 
 
+static void statement() {
+  expression();
+}
+
+
+static void declaration() {
+  statement();
+}
+
+
 // Api to compile a chunk ---------------------------------------
 
 
@@ -496,9 +524,11 @@ bool compile(Chunk* chunk, const char* source) {
   // return false;
 
   advance();
-  expression();
 
-  consume(TOKEN_EOF, "Expect end of expression.");
+  while (!match(TOKEN_EOF)) {
+    declaration();
+  }
+  
   finalizeChunk();
   
 
