@@ -494,7 +494,7 @@ static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
   } else {
-    fprintf(stderr, "Compiling throw-away expression");
+    fprintf(stderr, "Warning: Compiling throw-away expression\n");
     expression();
   }
 }

@@ -8,13 +8,13 @@
 
 void disassembleChunk(Chunk* chunk, const char* name) {
   printf("=== %s ===\n", name);
-
   for (int offset = 0; offset < chunk->count;) {
     // Note: instructions may take more than one slot (instruction width
     // is not fixed). As a result, we can't simply bump offset in the for
     // loop header.
-    offset = disassembleInstruction(chunk, offset);
+    offset = disassembleInstruction("", chunk, offset);
   }
+  printf("=== %s ===\n", name);
 }
 
 
@@ -34,8 +34,8 @@ int constantInstruction(const char*name, Chunk* chunk, int offset) {
 }
 
 
-int disassembleInstruction(Chunk* chunk, int offset) {
-  printf("%04d ", offset);
+int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
+  printf("%s %04d ", tag, offset);
 
   // Line numbers are right-justified with 4 spaces. Use a | for
   // opcodes whose line is the same as the previous one.
