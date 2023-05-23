@@ -233,6 +233,7 @@ static void unary();
 static void number();
 static void string();
 static void literal();
+static void variable();
 
 
 // Array of ParseRules to handle binary infix parsing.
@@ -264,7 +265,7 @@ ParseRule rules[] = {
   [TOKEN_GREATER_EQUAL] = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
-  [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
   [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
@@ -306,6 +307,11 @@ static ParseRule* getRule(TokenType type) {
    For example, if we're parsing a TERM then we want to eagerly consume
    all FACTORS, but if we see another TERM or a boolean operator we want
    to stop and let control flow bubble up.
+
+   Note that by the time we actually enter a rule triggered here, the
+   token triggering the rule in the Pratt table is *already* consumed,
+   so you need to access it using `parser.previous` if the rule has
+   variable logic (see for example `unary`).
 */
 static void parsePrecedence(Precedence precedence) {
   advance();
@@ -362,7 +368,11 @@ static void parseRhsForOperator(TokenType operator_type) {
 // Parse + compile core -----------------------------------------
 
 
-/* Parse a number, and add a constant to the bytecode */
+static uint8_t identifierConstant(Token* name) {
+  return makeConstant(OBJ_VAL(createString(name->start, name->length)));
+}
+
+
 static void number() {
   double value = strtod(parser.previous.start, NULL);
   emitConstant(NUMBER_VAL(value));
@@ -456,6 +466,19 @@ static void literal() {
 }
 
 
+static void namedVariable(Token* name) {
+  // Note that although we'll get duplicate Values in the constants
+  // for different instances of the same name in the AST, the
+  // underlying strings will be shared due to string interning.
+  uint8_t arg = identifierConstant(name);
+  emit2Bytes(OP_GET_GLOBAL, arg);
+}
+
+static void variable() {
+  namedVariable(&parser.previous); // note: the book passes by value here
+}
+
+
 
 static void unary() {
   TokenType operator_type = parser.previous.type;
@@ -503,11 +526,6 @@ static void statement() {
   } else {
     expressionStatement();
   }
-}
-
-
-static uint8_t identifierConstant(Token* name) {
-  return makeConstant(OBJ_VAL(createString(name->start, name->length)));
 }
 
 
