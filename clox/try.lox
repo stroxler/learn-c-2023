@@ -4,5 +4,12 @@ print 15 + 1;
 
 print (7 - 5) / 2 == 1;
 
-var x = "value of x";
+var x = "initial value of x";
+print x;
+
+x = "new value of x";
+
+
+8 + 7 = 9;
+
 print x;

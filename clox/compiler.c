@@ -213,7 +213,7 @@ char* precedenceName(Precedence precedence) {
 
 
 // pointer to a func with a `void parse_fn_name();` signature.
-typedef void (*ParseFn)();
+typedef void (*ParseFn)(bool canAssign);
 
 
 typedef struct {
@@ -223,17 +223,22 @@ typedef struct {
 } ParseRule;
 
 
-// Forward declarations of parsing functions
+// Forward declaration of expression, which ties most of the parsing
+// recursion together.
+static void expression();
+
+// Parsing functions that aren't yet in our pratt parsing table but will be
 static void declaration();
 static void statement();
-static void expression();
-static void grouping();
-static void binary();
-static void unary();
-static void number();
-static void string();
-static void literal();
-static void variable();
+
+// Forward declarations of parsing functions
+static void grouping(bool canAssign);
+static void binary(bool canAssign);
+static void unary(bool canAssign);
+static void number(bool canAssign);
+static void string(bool canAssign);
+static void literal(bool canAssign);
+static void variable(bool canAssign);
 
 
 // Array of ParseRules to handle binary infix parsing.
@@ -327,13 +332,14 @@ static void parsePrecedence(Precedence precedence) {
   // This should never be NULL because of the restriction that we
   // only call the function when `current` is at the start of a valid
   // expression.
+  bool canAssign = precedence <= PREC_ASSIGNMENT;
   ParseFn prefix_rule = getRule(start_token.type)->prefix;
   if (prefix_rule == NULL) {
     errorAtPrevious("Expect expression.");
     return;
   }
 
-  prefix_rule();
+  prefix_rule(canAssign);
 
   while (precedence <= getRule(parser.current.type)->precedence) {
     PRINT_DEBUG("Infix of parsePrecedence [start = %s (%d) / %s], parser.current is %s (%d) / %s\n",
@@ -345,7 +351,22 @@ static void parsePrecedence(Precedence precedence) {
 		precedenceName(getRule(parser.current.type)->precedence));
     advance();
     ParseFn infixRule = getRule(parser.previous.type)->infix;
-    infixRule();
+    infixRule(canAssign);
+  }
+
+  // If we hit this line, then a recursive call to parsePrecedence set
+  // canAssign to false, which means the overall thing we just parsed
+  // is an *invalid* assignment target.
+  //
+  // If we don't catch that here, then the outer loop will silently
+  // drop the `=` (because it maps to a null. We want a loud parse
+  // error instead.
+  //
+  // FWIW I tried putting this logic inside of NamedVariable and I got
+  // a syntax error on the right line, but it was the wrong error. I still
+  // haven't wrapped my head around Pratt enough to figure out why yet.
+  if (canAssign && match(TOKEN_EQUAL)) {
+    errorAtPrevious("Invalid assignment target.");
   }
 
   PRINT_DEBUG("End of parsePrecedence [start = %s (%d) / %s], parser.current is %s (%d) / %s\n",
@@ -373,13 +394,13 @@ static uint8_t identifierConstant(Token* name) {
 }
 
 
-static void number() {
+static void number(bool canAssign) {
   double value = strtod(parser.previous.start, NULL);
   emitConstant(NUMBER_VAL(value));
 }
 
 
-static void string() {
+static void string(bool canAssign) {
   const char* segment_start = parser.previous.start + 1;
   int segment_length = parser.previous.length - 2;
   emitConstant(OBJ_VAL(createString(segment_start, segment_length)));
@@ -387,12 +408,12 @@ static void string() {
 
 
 /* Parse an expression, consume ending ) */
-static void grouping() {
+static void grouping(bool canAssign) {
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression");
 }
 
-static void binary() {
+static void binary(bool canAssign) {
   TokenType operator_type = parser.previous.type;
   ParseRule* rule = getRule(operator_type);
 
@@ -448,7 +469,7 @@ static void binary() {
 }
 
 
-static void literal() {
+static void literal(bool canAssign) {
   switch (parser.previous.type) {
   case TOKEN_FALSE:
     emitByte(OP_FALSE);
@@ -466,21 +487,39 @@ static void literal() {
 }
 
 
-static void namedVariable(Token* name) {
+/* `canAssign` is a precedence-checking hack, specifically needed
+   because we can't treat `=` as a Pratt infix operator...
+
+   Why not? Two reasons:
+   - Not all expressions are valid assignment targets. If we used
+     Pratt parsing, it would be either tricky or impossible depending
+     on precedence rules to guarantee that we don't parse invalid code.
+   - We cannot eagerly compile the LHS - we need to peek ahead via a
+     `match(TOKEN_EQUAL)` to know whether we are getting or setting a
+     value *before* we decide whether to emit bytecode to evaluate
+     the expression and add it to the stack.
+*/
+static void namedVariable(Token* name, bool canAssign) {
   // Note that although we'll get duplicate Values in the constants
   // for different instances of the same name in the AST, the
   // underlying strings will be shared due to string interning.
   uint8_t arg = identifierConstant(name);
-  emit2Bytes(OP_GET_GLOBAL, arg);
+  // For bare variables, we can decide get vs set with a simple match
+  if (canAssign && match(TOKEN_EQUAL)) {
+    expression();  // evaluate the assignment RHS, put it on the stack
+    emit2Bytes(OP_SET_GLOBAL, arg);  // (it will stay on the stack)
+  } else {
+    emit2Bytes(OP_GET_GLOBAL, arg);
+  }
 }
 
-static void variable() {
-  namedVariable(&parser.previous); // note: the book passes by value here
+static void variable(bool canAssign) {
+  namedVariable(&parser.previous, canAssign); // note: the book passes by value here
 }
 
 
 
-static void unary() {
+static void unary(bool canAssign) {
   TokenType operator_type = parser.previous.type;
 
   parseRhsForOperator(operator_type);
