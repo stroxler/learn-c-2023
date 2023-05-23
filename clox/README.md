@@ -12,6 +12,11 @@ The repl loop is to run this:
 bash compile.sh && rlwrap ./clox.exe
 ```
 
+The from-source loop is to run this:
+```
+bash compile.sh && ./clox.exe try.lox
+```
+
 # Development notes
 
 The macros are complex enough that it's easy to start running into errors that
