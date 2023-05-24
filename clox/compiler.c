@@ -193,6 +193,36 @@ static void emitConstant(Value value) {
 }
 
 
+static int emitJump(OpCode jump_instruction) {
+  emitByte(jump_instruction);
+  // emit a not-yet-filled jump address. Use 2 bytes for 16-bit int.
+  emit2Bytes(0xff, 0xff);
+  // return the byte after the opcode, which will need
+  // to be patched once we are ready.
+  return currentChunk()->count - 2;
+}
+
+
+static void patchJump(int byte_after_opcode) {
+  // The jump instruction takes an offset from current ip rather than
+  // an absolute address, so we need to compute the address of next
+  // instruction (i.e. currentChunk->count) *relative* to
+  // byte_after_opcode.
+  int byte_after_address = byte_after_opcode + 2;
+  int offset = currentChunk()->count - byte_after_address;
+  if (offset > UINT16_MAX) {
+    errorAtPrevious("Too big a block in control flow - 16-bit overflow.");
+  }
+  // Patch the jump address; do a bit of bit manipulation here to
+  // spread the 16-bit offset across 2 bytes.
+  uint8_t lower_address_byte = offset & 0xff;
+  uint8_t upper_address_byte = (offset << 8) & 0xff;
+  currentChunk()->code[byte_after_opcode] = upper_address_byte;
+  currentChunk()->code[byte_after_opcode + 1] = lower_address_byte;
+}
+  
+
+
 // Parse precedence and Pratt tables ----------------------------
 
 
@@ -613,6 +643,28 @@ static void printStatement() {
 }
 
 
+static void ifStatement() {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'if'.");
+  // create a placeholder jump with no target
+  int jump_skip_if_address = emitJump(OP_JUMP_IF_FALSE);
+  // emit the code to run if no jump
+  statement();
+  // emit an unconditional jump to skip the else branch, if any
+  //  (note: we could optimize this out in the no-else case)
+  int jump_skip_else_address = emitJump(OP_JUMP);
+  // patch the jump for skipping if to point here
+  patchJump(jump_skip_if_address);
+  // if there is an else branch, emit the bytecode for it
+  if (match(TOKEN_ELSE)) {
+    statement();
+  }
+  // patch the jump to skip else block to point here
+  patchJump(jump_skip_else_address);
+}
+
+
 static void beginScope() {
   // Bump scope depth. Nothing else needs doing.
   currentCompiler->scopeDepth++;
@@ -649,6 +701,8 @@ static void block() {
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_IF)) {
+    ifStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     block();
   } else {

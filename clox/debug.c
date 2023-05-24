@@ -42,6 +42,15 @@ int byteInstruction(const char* name, Chunk* chunk, int offset) {
 }
 
 
+int jumpInstruction(const char* name, Chunk* chunk, int offset) {
+  // opcode should be left-justified with 16 columns of space
+  uint16_t address = (uint16_t)(chunk->code[offset + 1] << 8);
+  address |= chunk->code[offset + 2];
+  printf("%-16s %4d\n", name, address);
+  return offset + 3;
+}
+
+
 int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
   printf("%s %04d ", tag, offset);
 
@@ -97,6 +106,10 @@ int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
     return simpleInstruction("OP_POP", offset);
   case OP_PRINT:
     return simpleInstruction("OP_PRINT", offset);
+  case OP_JUMP:
+    return jumpInstruction("OP_JUMP", chunk, offset);
+  case OP_JUMP_IF_FALSE:
+    return jumpInstruction("OP_JUMP_IF_FALSE", chunk, offset);
   default:
     printf("Unknown opcode %d\n", instruction);
     return offset + 1;

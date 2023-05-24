@@ -100,6 +100,13 @@ Value peek(int distance) {
 
 
 #define READ_BYTE() (*vm.ip++)
+// (note: ++ binds tighter than *!)
+
+
+// read the next 2 bytes of bytecode as a big-endian 16-bit int
+#define READ_SHORT() \
+  (vm.ip += 2, (uint16_t)(vm.ip[-2] << 8) | vm.ip[-1])
+// (recall that the comma operator throws away the LHS of an expression)
 
 
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
@@ -257,6 +264,18 @@ static InterpretResult run() {
       return INTERPRET_OK;
       break;
     }
+    case OP_JUMP: {
+      uint16_t offset = READ_SHORT();
+      vm.ip += offset;
+      break;
+    }
+    case OP_JUMP_IF_FALSE: {
+      uint16_t offset = READ_SHORT();
+      if (valueFalsey(peek(0))) {
+	vm.ip += offset;
+      }
+      break;
+    }
     }
   }
 }
@@ -265,6 +284,7 @@ static InterpretResult run() {
 #undef READ_STRING
 #undef READ_CONSTANT
 #undef READ_BYTE
+#undef READ_SHORT
 #undef C_BINARY_NUMERIC_OP
 
 

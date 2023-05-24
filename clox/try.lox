@@ -14,3 +14,16 @@ print x;
     print "outside inner block, y is " + y;
 }
 
+
+if (8 == 7) {
+    print "8 and 7 are equal";
+} else {
+    print "8 and 7 are not equal";
+}
+
+
+if (8 == 8) {
+    print "8 and 8 are equal";
+} else {
+    print "8 and 8 are not equal";
+}
