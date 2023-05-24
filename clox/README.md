@@ -35,6 +35,10 @@ quite easily. I was able to work out the source of several segfaults pretty
 quickly this way (usually in that case you can get pretty far from just
 figuring out the current line of code).
 
+If you need to print-debug pointer arithmetic (this didn't come up for me until
+I was debugging off-by-one-errors in the jump patching), the pattern you want
+is to cast to `size_t` and then print (assuming you want decimal) using `%zu`.
+
 # Precedence and Pratt Parsing
 
 Pratt parsing is a little weird to get used to, I tried to take some inline
