@@ -18,6 +18,7 @@ typedef enum {
   OP_GET_LOCAL,
   OP_GREATER,
   OP_LESS,
+  OP_LOOP,
   OP_MULTIPLY,
   OP_NEGATE,
   OP_NIL,

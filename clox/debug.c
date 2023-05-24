@@ -106,6 +106,8 @@ int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
     return simpleInstruction("OP_POP", offset);
   case OP_PRINT:
     return simpleInstruction("OP_PRINT", offset);
+  case OP_LOOP:
+    return jumpInstruction("OP_LOOP", chunk, offset);
   case OP_JUMP:
     return jumpInstruction("OP_JUMP", chunk, offset);
   case OP_JUMP_IF_FALSE:

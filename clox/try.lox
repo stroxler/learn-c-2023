@@ -27,3 +27,15 @@ if (8 == 8) {
 } else {
     print "8 and 8 are not equal";
 }
+
+
+print (true and false);
+print (true or false);
+
+var loopvar = 3;
+while (loopvar > 0) {
+  print loopvar;
+  loopvar = loopvar - 1;
+}
+
+

@@ -203,6 +203,20 @@ static int emitJump(OpCode jump_instruction) {
 }
 
 
+static void emitLoop(int loop_start_index) {
+  // A loop is just a backward jump. The opcode has to differ because
+  // the offset is a uint16 and we need to treat it as negative.
+  emitByte(OP_LOOP);
+  // The offset is negative; +2 to account for the address itself,
+  // which we will have already read by the time we actually jump.
+  int offset = currentChunk()->count - loop_start_index + 2;
+  uint8_t lower_address_byte = offset & 0xff;
+  uint8_t upper_address_byte = (offset << 8) & 0xff;
+  emitByte(upper_address_byte);
+  emitByte(lower_address_byte);
+}
+
+
 static void patchJump(int byte_after_opcode) {
   // The jump instruction takes an offset from current ip rather than
   // an absolute address, so we need to compute the address of next
@@ -283,6 +297,8 @@ static void statement();
 
 // Forward declarations of parsing functions
 static void grouping(bool canAssign);
+static void or_(bool canAssign);
+static void and_(bool canAssign);
 static void binary(bool canAssign);
 static void unary(bool canAssign);
 static void number(bool canAssign);
@@ -321,7 +337,7 @@ ParseRule rules[] = {
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
-  [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_AND]           = {NULL,     and_,   PREC_AND},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
@@ -329,7 +345,7 @@ ParseRule rules[] = {
   [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
-  [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_OR]            = {NULL,      or_,   PREC_OR},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
@@ -624,6 +640,36 @@ static void unary(bool canAssign) {
 }
 
 
+static void and_(bool canAssign) {
+  // note that the LHS evaluation is already emitted, so the LHS
+  // result is on top of the stack. We jump to skip the RHS
+  int jump_skip_rhs = emitJump(OP_JUMP_IF_FALSE);
+  // if we *didn't* jump, then we need to pop the true value, then
+  // evaluate the RHS and put that on the stack. (The RHS is just an
+  // expression except with a precedence limit).
+  emitByte(OP_POP);
+  parsePrecedence(PREC_AND);
+  patchJump(jump_skip_rhs);
+}
+
+
+static void or_(bool canAssign) {
+  /* This is a bit cumbersome: instead of using a mirror-image
+     opcode so that or_ could use the same strucure as and_, we
+     use two jumps to imitate an OP_JUMP_IF_TRUE. We could
+     alternatively have used a pair of OP_NOTs for this. */
+  int jump_skip_jump = emitJump(OP_JUMP_IF_FALSE);
+  int jump_skip_rhs = emitJump(OP_JUMP);
+  patchJump(jump_skip_jump);
+  // Once we've entered the RHS, logic is similar to and_: pop
+  // the false value and evaluate the RHS.
+  emitByte(OP_POP);
+  parsePrecedence(PREC_OR);
+  patchJump(jump_skip_rhs);
+}
+
+
+
 static void expression() {
   parsePrecedence(PREC_ASSIGNMENT);
 }
@@ -649,6 +695,7 @@ static void ifStatement() {
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'if'.");
   // create a placeholder jump with no target
   int jump_skip_if_address = emitJump(OP_JUMP_IF_FALSE);
+  emitByte(OP_POP);  // (pop the condition from jump_skip_if)
   // emit the code to run if no jump
   statement();
   // emit an unconditional jump to skip the else branch, if any
@@ -656,12 +703,29 @@ static void ifStatement() {
   int jump_skip_else_address = emitJump(OP_JUMP);
   // patch the jump for skipping if to point here
   patchJump(jump_skip_if_address);
+  emitByte(OP_POP);  // (pop the condition from jump_skip_if)
   // if there is an else branch, emit the bytecode for it
   if (match(TOKEN_ELSE)) {
     statement();
   }
   // patch the jump to skip else block to point here
   patchJump(jump_skip_else_address);
+}
+
+
+static void whileStatement() {
+  int loop_start_index = currentChunk()->count;
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'if'.");
+  int jump_out_address = emitJump(OP_JUMP_IF_FALSE);
+  // while body
+  emitByte(OP_POP);
+  statement();
+  emitLoop(loop_start_index);
+  // exit condition
+  patchJump(jump_out_address);
+  emitByte(OP_POP);
 }
 
 
@@ -703,6 +767,8 @@ static void statement() {
     printStatement();
   } else if (match(TOKEN_IF)) {
     ifStatement();
+  } else if (match(TOKEN_WHILE)) {
+    whileStatement();
   } else if (match(TOKEN_LEFT_BRACE)) {
     block();
   } else {
