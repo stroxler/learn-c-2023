@@ -689,46 +689,6 @@ static void printStatement() {
 }
 
 
-static void ifStatement() {
-  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
-  expression();
-  consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'if'.");
-  // create a placeholder jump with no target
-  int jump_skip_if_address = emitJump(OP_JUMP_IF_FALSE);
-  emitByte(OP_POP);  // (pop the condition from jump_skip_if)
-  // emit the code to run if no jump
-  statement();
-  // emit an unconditional jump to skip the else branch, if any
-  //  (note: we could optimize this out in the no-else case)
-  int jump_skip_else_address = emitJump(OP_JUMP);
-  // patch the jump for skipping if to point here
-  patchJump(jump_skip_if_address);
-  emitByte(OP_POP);  // (pop the condition from jump_skip_if)
-  // if there is an else branch, emit the bytecode for it
-  if (match(TOKEN_ELSE)) {
-    statement();
-  }
-  // patch the jump to skip else block to point here
-  patchJump(jump_skip_else_address);
-}
-
-
-static void whileStatement() {
-  int loop_start_index = currentChunk()->count;
-  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
-  expression();
-  consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'if'.");
-  int jump_out_address = emitJump(OP_JUMP_IF_FALSE);
-  // while body
-  emitByte(OP_POP);
-  statement();
-  emitLoop(loop_start_index);
-  // exit condition
-  patchJump(jump_out_address);
-  emitByte(OP_POP);
-}
-
-
 static void beginScope() {
   // Bump scope depth. Nothing else needs doing.
   currentCompiler->scopeDepth++;
@@ -759,21 +719,6 @@ static void block() {
   }
   consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.");
   endScope();
-}
-
-
-static void statement() {
-  if (match(TOKEN_PRINT)) {
-    printStatement();
-  } else if (match(TOKEN_IF)) {
-    ifStatement();
-  } else if (match(TOKEN_WHILE)) {
-    whileStatement();
-  } else if (match(TOKEN_LEFT_BRACE)) {
-    block();
-  } else {
-    expressionStatement();
-  }
 }
 
 
@@ -869,6 +814,129 @@ static void varDeclaration() {
   // Consume the statement end and emit the bytecode to load the value.
   consume(TOKEN_SEMICOLON, "Expect ';' after var declaration.");
   defineVariable(maybe_global);
+}
+
+
+static void ifStatement() {
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'if'.");
+  // create a placeholder jump with no target
+  int jump_skip_if_address = emitJump(OP_JUMP_IF_FALSE);
+  emitByte(OP_POP);  // (pop the condition from jump_skip_if)
+  // emit the code to run if no jump
+  statement();
+  // emit an unconditional jump to skip the else branch, if any
+  //  (note: we could optimize this out in the no-else case)
+  int jump_skip_else_address = emitJump(OP_JUMP);
+  // patch the jump for skipping if to point here
+  patchJump(jump_skip_if_address);
+  emitByte(OP_POP);  // (pop the condition from jump_skip_if)
+  // if there is an else branch, emit the bytecode for it
+  if (match(TOKEN_ELSE)) {
+    statement();
+  }
+  // patch the jump to skip else block to point here
+  patchJump(jump_skip_else_address);
+}
+
+
+static void whileStatement() {
+  int loop_start_index = currentChunk()->count;
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  expression();
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'if'.");
+  int jump_out_address = emitJump(OP_JUMP_IF_FALSE);
+  // while body
+  emitByte(OP_POP);
+  statement();
+  emitLoop(loop_start_index);
+  // exit condition
+  patchJump(jump_out_address);
+  emitByte(OP_POP);
+}
+
+
+static void forStatement() {
+  beginScope();  // unlike a while, a for can create bindings (in header)
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.");
+  // initializer
+  if (!match(TOKEN_SEMICOLON)) {
+    // The initializer cannot be any statement, only a var declaration
+    // or an expression. Either way, we'll consume the semicolon!
+    if (match(TOKEN_VAR)) {
+      varDeclaration();
+    } else {
+      expressionStatement();
+    }
+  }
+  int loop_from_body_end_index = currentChunk()->count;
+  // stop condition
+  int jump_out_address = -1;
+  if (!match(TOKEN_SEMICOLON)) {
+    // we can't use expressionStatement to consume the ';' here
+    // because that would pop the condition! So we consume manually.
+    expression();
+    jump_out_address = emitJump(OP_JUMP_IF_FALSE);
+    consume(TOKEN_SEMICOLON, "Expect ';'.");
+    // at this point we've either jumped or we're going to start
+    // the loop cycle; in the latter case, we must pop condition.
+    emitByte(OP_POP);
+  }
+  // incrementer
+  //
+  // This is a bit ugly because of single-pass compilation; ideally
+  // we would just add the bytecode to the bottom of the body, but
+  // to deal with restrictions of single-pass compilation we use
+  // jumps.
+  //
+  // This means we also have to hot-patch the loop address used at
+  // the end of the body.
+  if (!match(TOKEN_RIGHT_PAREN)) {
+    // set a jump so that we don't execute this coming out of the
+    // stop condition - we don't want it until we hit the end of body
+    int jump_skip_incrementer = emitJump(OP_JUMP);
+    // hot patch so that end of body will loop here, whereas we'll
+    // loop from here back to the start.
+    int loop_to_start = loop_from_body_end_index;
+    loop_from_body_end_index = currentChunk()->count;
+    // this is like expressionStatement, but it doesn't conume a `;`.
+    expression();
+    emitByte(OP_POP);
+    // okay we are almost... check syntax and loop back to condition
+    consume(TOKEN_RIGHT_PAREN, "Expect ')' after 'if'.");
+    emitLoop(loop_to_start);
+    // finally, fill in the jump that skips this code - we don't
+    // want to run it after the incrementer, only after the body
+    patchJump(jump_skip_incrementer);
+  }
+  // body
+  statement();
+  // loop back to *either* start (if no incrementer) or incrementer.
+  emitLoop(loop_from_body_end_index);
+  // exit condition (if there's an exit clause)
+  if (jump_out_address != -1) {
+    patchJump(jump_out_address);
+    emitByte(OP_POP);
+  }
+  endScope();
+}
+
+
+static void statement() {
+  if (match(TOKEN_PRINT)) {
+    printStatement();
+  } else if (match(TOKEN_IF)) {
+    ifStatement();
+  } else if (match(TOKEN_WHILE)) {
+    whileStatement();
+  } else if (match(TOKEN_FOR)) {
+    forStatement();
+  } else if (match(TOKEN_LEFT_BRACE)) {
+    block();
+  } else {
+    expressionStatement();
+  }
 }
 
 

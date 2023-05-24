@@ -39,3 +39,7 @@ while (loopvar > 0) {
 }
 
 
+for (var i = "i"; i != "iii"; i = i + "i") {
+    print i;
+}
+
