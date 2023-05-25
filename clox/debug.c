@@ -112,6 +112,8 @@ int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
     return jumpInstruction("OP_JUMP", chunk, offset);
   case OP_JUMP_IF_FALSE:
     return jumpInstruction("OP_JUMP_IF_FALSE", chunk, offset);
+  case OP_CALL:
+    return byteInstruction("OP_CALL", chunk, offset);
   default:
     printf("Unknown opcode %d\n", instruction);
     return offset + 1;

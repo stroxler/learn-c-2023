@@ -71,7 +71,7 @@ ObjString* createString(const char* segment_start, int length);
 
 // This can't be a macro because `value` is used more than once.
 static inline bool isObjType(Value value, ObjType type) {
-  return IS_OBJ(value) && OBJ_TYPE(value) == OBJ_STRING;
+  return IS_OBJ(value) && OBJ_TYPE(value) == type;
 }
 
 

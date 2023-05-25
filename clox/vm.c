@@ -99,6 +99,35 @@ Value peek(int distance) {
 }
 
 
+/* Helpers for run() */
+
+static bool call(ObjFunction* function, uint8_t arg_count) {
+  // Check that we can grab a call frame, then grab it
+  if ((vm.frameCount >= FRAMES_MAX)) {
+    runtimeError("Stack overflow (too many call frames).");
+    return false;
+  }
+  if ((function->arity != arg_count)) {
+    runtimeError("Mismatch in argument count.");
+  }
+  CallFrame* frame = &vm.frames[vm.frameCount++];
+  frame->function = function;
+  frame->ip = function->chunk.code;
+  frame->slots = vm.stack_top - arg_count - 1;
+  return true;
+}
+
+
+static bool callValue(Value callee, uint8_t arg_count) {
+  if (IS_OBJ(callee) && IS_FUNCTION(callee)) {
+    return call(AS_FUNCTION(callee), arg_count);
+  } else {
+    runtimeError("Can only call functions.");
+    return false;
+  }
+}
+
+
 /* Macros for `run()`. We unset them after. */
 
 
@@ -291,6 +320,18 @@ static InterpretResult run() {
       if (valueFalsey(peek(0))) {
 	frame->ip += offset;
       }
+      break;
+    }
+    case OP_CALL: {
+      uint8_t arg_count = READ_BYTE();
+      // Set up the call. This can fail (e.g. if the function is not
+      // callable, if arg counts are mismatched). If it *is* successful,
+      // it will append a frame to vm.frames and we then need to
+      // bump the local frame in the `run()` loop.
+      if (!callValue(peek(arg_count), arg_count)) {
+	return INTERPRET_RUNTIME_ERROR;
+      }
+      frame = &vm.frames[vm.frameCount - 1];
       break;
     }
     }

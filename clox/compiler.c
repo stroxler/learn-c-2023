@@ -249,7 +249,8 @@ void initCompiler(Compiler* compiler, FunctionType type) {
   compiler->function = newFunction();
   compiler->enclosing = currentCompiler;
   // allocate one placeholder local at stack slot 0, which
-  // we need to reserve for function calls
+  // we need to reserve for method calls (we will bind "this"
+  // to stack slot 0 in bound method).
   Local* local = &compiler->locals[compiler->localCount++];
   local->depth = 0;
   local->name.start = "";
@@ -373,6 +374,7 @@ static void number(bool canAssign);
 static void string(bool canAssign);
 static void literal(bool canAssign);
 static void variable(bool canAssign);
+static void call(bool canAssign);
 
 
 // Array of ParseRules to handle binary infix parsing.
@@ -383,7 +385,7 @@ static void variable(bool canAssign);
 // I was a bit surprised but bang does indeed have ultra-low
 // precedence.
 ParseRule rules[] = {
-  [TOKEN_LEFT_PAREN]    = {grouping, NULL,   PREC_NONE},
+  [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
@@ -682,9 +684,36 @@ static void namedVariable(Token* name, bool canAssign) {
   }
 }
 
+
 static void variable(bool canAssign) {
   namedVariable(&parser.previous, canAssign); // note: the book passes by value here
 }
+
+
+static uint8_t argumentsList() {
+  uint8_t arg_count = 0;
+  if (!check(TOKEN_LEFT_PAREN)) {
+    do {
+      expression();
+      arg_count++;
+      if (arg_count == 255) {
+        errorAtPrevious("Can't have more than 255 arguments in call.");
+      }
+    } while (match(TOKEN_COMMA));
+  }
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after arguments in call.");
+  return arg_count;
+}
+
+
+static void call(bool canAssign) {
+  uint8_t arg_count = argumentsList();
+  // At this point, the top of the stack is the function followed by
+  // arg_count arguments. We need the arg count to find the function,
+  // and also to know where to set the frame pointer.
+  emit2Bytes(OP_CALL, arg_count);
+}
+
 
 
 static void unary(bool canAssign) {
@@ -901,6 +930,19 @@ static void function(FunctionType type) {
   beginScope();
   // Parameters
   consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+  if (!check(TOKEN_RIGHT_PAREN)) {
+    do {
+      // for each param:
+      // - bump the arity
+      // - reserve a slot on the stack (in order)
+      compiler.function->arity++;
+      if (compiler.function->arity > 255) {
+	errorAtPrevious("Cannot exceeed 255 parameters.");
+      }
+      uint8_t param = parseVariableInDeclaration("Expect parameter name");
+      defineVariable(param);
+    } while (match(TOKEN_COMMA));
+  }
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after function parameters.");
   // Note: we have to consume this -- block() doesn't consume the
   // starting brace, because we match it when dispatching. But block()
@@ -915,6 +957,9 @@ static void function(FunctionType type) {
 static void functionDeclaration() {
   uint8_t global_or_local = parseVariableInDeclaration("Expect function name");
   if (currentCompiler->scopeDepth != 0) {
+    // Marking as initialized before we define the function will allow
+    // recursion for local functions, although only after we implement
+    // closures.
     markLocalAsInitialized();
   }
   function(FUNCTION_TYPE);

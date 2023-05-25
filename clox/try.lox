@@ -12,6 +12,11 @@ print x;
 }
 
 
-fun f() {
-  x = "x";
+fun f(param0, param1) {
+  x = param0;
+  var y = param1;
+  print x + " " + y;
 }
+
+
+f("arg0", "arg1");
