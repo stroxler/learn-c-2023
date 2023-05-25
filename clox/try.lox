@@ -10,3 +10,8 @@ print x;
   print z;
   print y;
 }
+
+
+fun f() {
+  x = "x";
+}

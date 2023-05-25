@@ -30,7 +30,7 @@ typedef enum {
 } FunctionType;
 
 
-typedef struct {
+typedef struct Compiler {
   Local locals[UINT8_COUNT];
   int localCount;
   int scopeDepth;
@@ -38,34 +38,20 @@ typedef struct {
   // in the compiler, but a function nontheless for consistency.
   FunctionType type;
   ObjFunction* function;
+  // At top-level this is null; in normal functions this has the
+  // enclosing function's compiler (top-level if function is global)
+  //
+  // Note that the typedef isn't finished so we have to use `struct`
+  // here. C's scoping rules are kind of weird - thi sis also why we
+  // have to put the name Compiler both before *and* after - the
+  // before one names the struct for self-reference and the after one
+  // creates the typedef.
+  struct Compiler* enclosing;
 } Compiler;
 
 
+// Note the null initialization; we rely on this in initCompiler.
 Compiler* currentCompiler = NULL;
-
-
-// Viewing scanner output (debugging only) -----------------
-
-
-void showTokens() {
-  int line = -1;
-  for (;;) {
-    Token token = scanToken();
-    if (token.line != line) {
-      printf("%4d: ", token.line);
-      line = token.line;
-    } else {
-      printf ("   |  ");
-    }
-    printf("%2d '%.*s'\n", token.type, token.length, token.start);
-    if (token.type == TOKEN_EOF) {
-      break;
-    }
-  }
-}
-
-
-// Parsing utility logic ------------------------------------
 
 
 typedef struct {
@@ -77,6 +63,16 @@ typedef struct {
 
 
 Parser parser;
+
+
+void initParser(const char* source) {
+  initScanner(source);
+  parser.hadError = false;
+  parser.hadErrorSinceSynchronize = false;
+}
+
+
+// Parsing utility logic ------------------------------------
 
 
 static void errorAt(Token* token, const char* message) {
@@ -161,6 +157,7 @@ static bool match(TokenType type) {
   }
 }
 
+
 // Compiling utility code ---------------------------------------
 
 
@@ -241,6 +238,71 @@ static void patchJump(int byte_after_opcode) {
   currentChunk()->code[byte_after_opcode + 1] = lower_address_byte;
 }
   
+
+// Compiler initialization + end (used in every function) --------
+
+void initCompiler(Compiler* compiler, FunctionType type) {
+  // initialize all fields
+  compiler->localCount = 0;
+  compiler->scopeDepth = 0;
+  compiler->type = type;
+  compiler->function = newFunction();
+  compiler->enclosing = currentCompiler;
+  // allocate one placeholder local at stack slot 0, which
+  // we need to reserve for function calls
+  Local* local = &compiler->locals[compiler->localCount++];
+  local->depth = 0;
+  local->name.start = "";
+  local->name.length = 0;
+  // Set the current compiler global
+  currentCompiler = compiler;
+  // Grab the function name based on the current token if not top-level
+  if (type != SCRIPT_TYPE) {
+    compiler->function->name = createString(parser.previous.start,
+					    parser.previous.length);
+  }
+}
+
+
+static ObjFunction* endCompiler() {
+  emitByte(OP_RETURN);
+  ObjFunction* function = currentCompiler->function;
+
+  // if in debug mode, print the bytecode
+#ifdef DEBUG_PRINT_CODE
+  const char* name = function->name != NULL ? function->name->chars : "<script>";
+  if (!parser.hadError) {
+    disassembleChunk(currentChunk(), name);
+  }
+#endif
+
+  // pop back to the parent compiler (NULL if this is already
+  // top-level, otherwise the enclosing scope after a function).
+  currentCompiler = currentCompiler->enclosing;
+  return function;
+}
+
+
+// Viewing scanner output (debugging only) -----------------
+
+
+void showTokens() {
+  int line = -1;
+  for (;;) {
+    Token token = scanToken();
+    if (token.line != line) {
+      printf("%4d: ", token.line);
+      line = token.line;
+    } else {
+      printf ("   |  ");
+    }
+    printf("%2d '%.*s'\n", token.type, token.length, token.start);
+    if (token.type == TOKEN_EOF) {
+      break;
+    }
+  }
+}
+
 
 
 // Parse precedence and Pratt tables ----------------------------
@@ -789,9 +851,15 @@ uint8_t parseVariableInDeclaration(const char* error_message) {
 }
 
 
-void defineVariable(uint8_t maybe_global) {
+void markLocalAsInitialized() {
+  Local* local = &currentCompiler->locals[currentCompiler->localCount - 1];
+  local->depth = currentCompiler->scopeDepth;
+}
+
+
+void defineVariable(uint8_t global_or_local) {
   if (currentCompiler->scopeDepth == 0) {
-    emit2Bytes(OP_DEFINE_GLOBAL, maybe_global);
+    emit2Bytes(OP_DEFINE_GLOBAL, global_or_local);
   } else {
     // For locals, we don't need to emit any opcode here. We already
     // emitted the byetocde for the RHS inside varDeclaration, and
@@ -800,8 +868,7 @@ void defineVariable(uint8_t maybe_global) {
     //
     // But we do need to mark the local as reachable only *after*
     // resolving the bytecode for any initializing instruction.
-    Local* local = &currentCompiler->locals[currentCompiler->localCount - 1];
-    local->depth = currentCompiler->scopeDepth;
+    markLocalAsInitialized();
   }
 }
   
@@ -810,7 +877,7 @@ static void varDeclaration() {
   // Push the global name onto the stack (which, in the process, adds
   // the value to chunk.constants and the underlying ObjString* to
   // vm.strings).
-  uint8_t maybe_global = parseVariableInDeclaration("Expect variable name.");
+  uint8_t global_or_local = parseVariableInDeclaration("Expect variable name.");
   // Push the initial value on the stack - nil if no assignment
   if (match(TOKEN_EQUAL)) {
     expression();
@@ -819,7 +886,39 @@ static void varDeclaration() {
   }
   // Consume the statement end and emit the bytecode to load the value.
   consume(TOKEN_SEMICOLON, "Expect ';' after var declaration.");
-  defineVariable(maybe_global);
+  defineVariable(global_or_local);
+}
+
+
+static void function(FunctionType type) {
+  // Push a compiler onto the compiler stack. Note that the compiler
+  // is stack-allocated, in the current call frame; we need to be
+  // done with it by the end.
+  Compiler compiler;
+  initCompiler(&compiler, type);
+  // A function cannot define globals, so our function-level compiler
+  // jumps to a (first-level) local scope immediately and never leaves.
+  beginScope();
+  // Parameters
+  consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
+  consume(TOKEN_RIGHT_PAREN, "Expect ')' after function parameters.");
+  // Note: we have to consume this -- block() doesn't consume the
+  // starting brace, because we match it when dispatching. But block()
+  // *does* consume the ending brace.
+  consume(TOKEN_LEFT_BRACE, "Expect '{' to start function body.");
+  block();
+  ObjFunction* function = endCompiler();
+  emit2Bytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
+}
+
+
+static void functionDeclaration() {
+  uint8_t global_or_local = parseVariableInDeclaration("Expect function name");
+  if (currentCompiler->scopeDepth != 0) {
+    markLocalAsInitialized();
+  }
+  function(FUNCTION_TYPE);
+  defineVariable(global_or_local);
 }
 
 
@@ -975,6 +1074,8 @@ static void synchronize() {
 static void declaration() {
   if (match(TOKEN_VAR)) {
     varDeclaration();
+  } else if (match(TOKEN_FUN)) {
+    functionDeclaration();
   } else {
     statement();
   }
@@ -987,45 +1088,6 @@ static void declaration() {
 
 // Api to compile a chunk ---------------------------------------
 
-
-void initParser(const char* source) {
-  initScanner(source);
-  parser.hadError = false;
-  parser.hadErrorSinceSynchronize = false;
-}
-
-
-void initCompiler(Compiler* compiler, FunctionType type) {
-  // initialize all fields
-  compiler->localCount = 0;
-  compiler->scopeDepth = 0;
-  compiler->type = type;
-  compiler->function = newFunction();
-  // allocate one placeholder local at stack slot 0, which
-  // we need to reserve for function calls
-  Local* local = &compiler->locals[compiler->localCount++];
-  local->depth = 0;
-  local->name.start = "";
-  local->name.length = 0;
-  // Set the current compiler global
-  currentCompiler = compiler;
-}
-
-
-static ObjFunction* finalizeChunk() {
-  emitByte(OP_RETURN);
-  ObjFunction* function = currentCompiler->function;
-
-  // if in debug mode, print the bytecode
-#ifdef DEBUG_PRINT_CODE
-  const char* name = function->name != NULL ? function->name->chars : "<script>";
-  if (!parser.hadError) {
-    disassembleChunk(currentChunk(), name);
-  }
-#endif
-
-  return function;
-}
 
 
 ObjFunction* compile(const char* source) {
@@ -1043,7 +1105,12 @@ ObjFunction* compile(const char* source) {
     declaration();
   }
   
-  ObjFunction* function = finalizeChunk();
+  ObjFunction* function = endCompiler();
+
+  if (currentCompiler != NULL) {
+    fprintf(stderr, "Bug in compiler: at end, non-null currentCompiler");
+    exit(1);
+  }
   
 
   return parser.hadError ? NULL : function;
