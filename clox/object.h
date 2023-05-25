@@ -4,11 +4,12 @@
 #include "common.h"
 #include "memory.h"
 #include "value.h"
-#include "vm.h"
+#include "chunk.h"
 
 
 typedef enum {
   OBJ_STRING,
+  OBJ_FUNCTION,
 } ObjType;
 
 
@@ -44,6 +45,18 @@ struct ObjString {
 };
 
 
+// This one, on the other hand is not forward-declared
+//
+// Note that the chunk is built-in, not a pointer (the underlying
+// bytes are themselves a pointer, chunk is just the metadata)
+typedef struct {
+  Obj obj;
+  int arity;
+  Chunk chunk;
+  ObjString* name;
+} ObjFunction;
+
+
 ObjString* createString(const char* segment_start, int length);
 
 
@@ -63,10 +76,13 @@ static inline bool isObjType(Value value, ObjType type) {
 
 
 #define IS_STRING(value) (isObjType(value, OBJ_STRING))
+#define IS_FUNCTION(value) (isObjType(value, OBJ_FUNCTION))
 
 
 #define AS_STRING(value) ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString*)AS_OBJ(value))->chars)
+
+#define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
 
 
 /* Helper functions for objects. Again, these take a Value as input */
@@ -74,6 +90,8 @@ static inline bool isObjType(Value value, ObjType type) {
 void printObject(Value value);
 bool objectEqual(Value value0, Value value1);
 Value concatenateStrings(Value left, Value right);
+
+ObjFunction* newFunction();
 
 /* Helper function for the VM to garbage collect objects.
 

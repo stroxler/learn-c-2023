@@ -7,13 +7,26 @@
 #include "table.h"
 
 
-#define STACK_MAX 256
+#define FRAMES_MAX 64
+// We get UINT8_COUNT locals *per frame*, because
+// locals are looked up using a uint8_t offset against
+// each frame pointer.
+#define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
+// technically we don't actually have robust checking against
+// too many temporary variables, it is *possible* to stack overflow
+// (see the note in Section 24.3 about temporaries overflowing)
+
+typedef struct {
+  ObjFunction* function;
+  uint8_t* ip;
+  Value* slots;  // frame pointer into vm.stack
+} CallFrame;
 
 
 typedef struct {
-  // bytecode + instruction pointer
-  Chunk* chunk;
-  uint8_t* ip;
+  // frame stack
+  CallFrame frames[FRAMES_MAX];
+  int frameCount;
   // value stack
   Value stack[STACK_MAX];
   Value* stack_top;

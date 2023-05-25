@@ -65,9 +65,20 @@ ObjString* createString(const char* segment_start, int length) {
 
 void printObject(Value value) {
   switch (OBJ_TYPE(value)) {
-  case OBJ_STRING:
+  case OBJ_STRING: {
     printf("\"%s\"", AS_CSTRING(value));
     break;
+  }
+  case OBJ_FUNCTION: {
+    ObjFunction* function = AS_FUNCTION(value);
+    if (function->name == NULL) {
+      // Should not happen if interpreter is working correctly.
+      printf("<fn top-level>");
+    } else {
+      printf("<fn %s>", function->name->chars);
+    }
+    break;
+  }
   }
 }
 
@@ -107,12 +118,28 @@ Value concatenateStrings(Value left, Value right) {
 }
 
 
+/* Get a dummy function with mostly-empty data but an initialized chunk */
+ObjFunction* newFunction() {
+  ObjFunction* function = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
+  function->arity = 0;
+  function->name = NULL;
+  initChunk(&function->chunk);
+  return function;
+}
+
+
 void freeObject(Obj* object) {
   switch (object->type) {
   case OBJ_STRING: {
     ObjString* string = (ObjString*) object;
     FREE_ARRAY(char, string->chars, string->length + 1);
     FREE(ObjString, string);
+    break;
+  }
+  case OBJ_FUNCTION: {
+    ObjFunction* function = (ObjFunction*) object;
+    freeChunk(&function->chunk);
+    FREE(ObjFunction, function);
     break;
   }
   }

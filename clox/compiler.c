@@ -23,10 +23,21 @@ typedef struct{
 } Local;
 
 
+
+typedef enum {
+  SCRIPT_TYPE,
+  FUNCTION_TYPE,
+} FunctionType;
+
+
 typedef struct {
   Local locals[UINT8_COUNT];
   int localCount;
   int scopeDepth;
+  // Similar to Pyre, we treat top-level as a special kind of function
+  // in the compiler, but a function nontheless for consistency.
+  FunctionType type;
+  ObjFunction* function;
 } Compiler;
 
 
@@ -153,13 +164,8 @@ static bool match(TokenType type) {
 // Compiling utility code ---------------------------------------
 
 
-// There's just one active chunk per compile for the moment.
-// This will change when we move beyond only supporting expressions.
-Chunk* compilingChunk;
-
-
 static Chunk* currentChunk() {
-  return compilingChunk;
+  return &currentCompiler->function->chunk;
 }
 
 
@@ -982,37 +988,50 @@ static void declaration() {
 // Api to compile a chunk ---------------------------------------
 
 
-void initParser(Chunk* chunk, const char* source) {
+void initParser(const char* source) {
   initScanner(source);
   parser.hadError = false;
   parser.hadErrorSinceSynchronize = false;
-  compilingChunk = chunk;
 }
 
 
-void initCompiler(Compiler* compiler) {
+void initCompiler(Compiler* compiler, FunctionType type) {
+  // initialize all fields
   compiler->localCount = 0;
   compiler->scopeDepth = 0;
+  compiler->type = type;
+  compiler->function = newFunction();
+  // allocate one placeholder local at stack slot 0, which
+  // we need to reserve for function calls
+  Local* local = &compiler->locals[compiler->localCount++];
+  local->depth = 0;
+  local->name.start = "";
+  local->name.length = 0;
+  // Set the current compiler global
   currentCompiler = compiler;
 }
 
 
-static void finalizeChunk() {
-  // For the moment, inject a return after we compile an expression.
-  // The line number will match the end of the expression.
+static ObjFunction* finalizeChunk() {
   emitByte(OP_RETURN);
+  ObjFunction* function = currentCompiler->function;
+
+  // if in debug mode, print the bytecode
 #ifdef DEBUG_PRINT_CODE
+  const char* name = function->name != NULL ? function->name->chars : "<script>";
   if (!parser.hadError) {
-    disassembleChunk(currentChunk(), "code");
+    disassembleChunk(currentChunk(), name);
   }
 #endif
+
+  return function;
 }
 
 
-bool compile(Chunk* chunk, const char* source) {
-  initParser(chunk, source);
+ObjFunction* compile(const char* source) {
+  initParser(source);
   Compiler compiler;  // (note this is stack allocated, it goes out of scope at func end)
-  initCompiler(&compiler);
+  initCompiler(&compiler, SCRIPT_TYPE);
 
   // // debug hook:
   // showTokens();
@@ -1024,8 +1043,8 @@ bool compile(Chunk* chunk, const char* source) {
     declaration();
   }
   
-  finalizeChunk();
+  ObjFunction* function = finalizeChunk();
   
 
-  return !parser.hadError;
+  return parser.hadError ? NULL : function;
 }

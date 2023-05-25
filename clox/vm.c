@@ -45,6 +45,7 @@ void initVM() {
   resetStack();
   initTable(&vm.strings);
   initTable(&vm.globals);
+  vm.frameCount = 0;
 }
 
 static void runtimeError(const char* format, ...) {
@@ -54,13 +55,15 @@ static void runtimeError(const char* format, ...) {
   vfprintf(stderr, format, args);
   va_end(args);
   fputs("\n", stderr);
+
   // Find the relevant line number and dump that as well
   //
   // Why the extra -1? Remember that one invariant is `ip` always
   // points at the *next* byte we would work with, not the one we are
-  // currently processing (the READ_BYTE macro enforces this).
-  size_t instruction = vm.ip - vm.chunk->code - 1;
-  int line = vm.chunk->lines[instruction];
+  // now. If we hit an error, it happened on the previously-used byte.
+  CallFrame* frame = &vm.frames[vm.frameCount - 1];
+  size_t instruction = frame->ip - frame->function->chunk.code - 1;
+  int line = frame->function->chunk.lines[instruction];
   fprintf(stderr, "[line %d]\n", line);
 
   // We're always going to abort execution when we hit a runtimeError
@@ -99,17 +102,17 @@ Value peek(int distance) {
 /* Macros for `run()`. We unset them after. */
 
 
-#define READ_BYTE() (*vm.ip++)
+#define READ_BYTE() (*frame->ip++)
 // (note: ++ binds tighter than *!)
 
 
 // read the next 2 bytes of bytecode as a big-endian 16-bit int
 #define READ_SHORT() \
-  (vm.ip += 2, (uint16_t)(vm.ip[-2] << 8) | vm.ip[-1])
+  (frame->ip += 2, (uint16_t)(frame->ip[-2] << 8) | frame->ip[-1])
 // (recall that the comma operator throws away the LHS of an expression)
 
 
-#define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
 
 
 #define READ_STRING() AS_STRING(READ_CONSTANT())
@@ -140,6 +143,12 @@ Value peek(int distance) {
 // (recall static means private, loosely speaking)
 static InterpretResult run() {
 
+  // Grab the top frame.
+  //
+  // All locals are looked up relative to its frame offset,
+  // and ip is now tracked per-frame.
+  CallFrame* frame = &vm.frames[vm.frameCount - 1];
+
   for (;;) {
     #ifdef DEBUG_TRACE_EXECUTION
     printf("trace:          stack: { ");
@@ -150,8 +159,8 @@ static InterpretResult run() {
     }
     printf(" }\n");
     disassembleInstruction("trace:",
-			   vm.chunk,
-			   (int)(vm.ip - vm.chunk->code));
+			   &frame->function->chunk,
+			   (int)(frame->ip - frame->function->chunk.code));
 			   
     #endif
     uint8_t instruction;
@@ -252,12 +261,12 @@ static InterpretResult run() {
       //
       // This opcode is only used when setting an already-existant local.
       uint8_t slot = READ_BYTE();
-      vm.stack[slot] = peek(0);
+      frame->slots[slot] = peek(0);
       break;
     }
     case OP_GET_LOCAL: {
       uint8_t slot = READ_BYTE();
-      push(vm.stack[slot]);
+      push(frame->slots[slot]);
       break;
     }
     case OP_RETURN: {
@@ -266,12 +275,12 @@ static InterpretResult run() {
     }
     case OP_JUMP: {
       uint16_t offset = READ_SHORT();
-      vm.ip += offset;
+      frame->ip += offset;
       break;
     }
     case OP_LOOP: {
       uint16_t offset = READ_SHORT();
-      vm.ip -= offset;
+      frame->ip -= offset;
       break;
     }
     case OP_JUMP_IF_FALSE: {
@@ -280,7 +289,7 @@ static InterpretResult run() {
       // necessary; we retain it here because logical operators will
       // want it.
       if (valueFalsey(peek(0))) {
-	vm.ip += offset;
+	frame->ip += offset;
       }
       break;
     }
@@ -296,26 +305,19 @@ static InterpretResult run() {
 #undef C_BINARY_NUMERIC_OP
 
 
-InterpretResult interpretChunk(Chunk* chunk) {
-  return run();
-}
-
-
 InterpretResult interpret(const char* source) {
-  Chunk chunk;
-  initChunk(&chunk);
-  if (!compile(&chunk, source)) {
-    freeChunk(&chunk);
+  ObjFunction* function = compile(source);
+  if (function == NULL) {
     return INTERPRET_COMPILE_ERROR;
   }
 
-  vm.chunk = &chunk;
-  vm.ip = vm.chunk->code;
-  InterpretResult result = run();
+  push(OBJ_VAL(function));
+  CallFrame* frame = &vm.frames[vm.frameCount++];
+  frame->function = function;
+  frame->ip = function->chunk.code;
+  frame->slots = vm.stack;
 
-  vm.chunk = NULL;
-  freeChunk(&chunk);
-  return result;
+  return run();
 }
 
 

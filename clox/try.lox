@@ -1,45 +1,12 @@
-var x = "initial value of x";
-print x;
+print "hi!";
 
-x = "new value of x";
+var x = "x value";
 print x;
 
 {
-    var y = "value of y";
-    {
-      print y;
-      var y = "shadows y, which was originally " + y;
-      print y;
-    }
-    print "outside inner block, y is " + y;
+  var y = "y value";
+  print y;
+  var z = "z value";
+  print z;
+  print y;
 }
-
-
-if (8 == 7) {
-    print "8 and 7 are equal";
-} else {
-    print "8 and 7 are not equal";
-}
-
-
-if (8 == 8) {
-    print "8 and 8 are equal";
-} else {
-    print "8 and 8 are not equal";
-}
-
-
-print (true and false);
-print (true or false);
-
-var loopvar = 3;
-while (loopvar > 0) {
-  print loopvar;
-  loopvar = loopvar - 1;
-}
-
-
-for (var i = "i"; i != "iii"; i = i + "i") {
-    print i;
-}
-
