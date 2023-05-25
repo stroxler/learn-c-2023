@@ -10,6 +10,7 @@
 typedef enum {
   OBJ_STRING,
   OBJ_FUNCTION,
+  OBJ_CLOSURE,
 } ObjType;
 
 
@@ -57,6 +58,12 @@ typedef struct {
 } ObjFunction;
 
 
+typedef struct {
+  Obj obj;
+  ObjFunction* function;
+} ObjClosure;
+
+
 ObjString* createString(const char* segment_start, int length);
 
 
@@ -77,12 +84,14 @@ static inline bool isObjType(Value value, ObjType type) {
 
 #define IS_STRING(value) (isObjType(value, OBJ_STRING))
 #define IS_FUNCTION(value) (isObjType(value, OBJ_FUNCTION))
+#define IS_CLOSURE(value) (isObjType(value, OBJ_CLOSURE))
 
 
 #define AS_STRING(value) ((ObjString*)AS_OBJ(value))
 #define AS_CSTRING(value) (((ObjString*)AS_OBJ(value))->chars)
 
 #define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
+#define AS_CLOSURE(value) ((ObjClosure*)AS_OBJ(value))
 
 
 /* Helper functions for objects. Again, these take a Value as input */
@@ -92,6 +101,7 @@ bool objectEqual(Value value0, Value value1);
 Value concatenateStrings(Value left, Value right);
 
 ObjFunction* newFunction();
+ObjClosure* newClosure(ObjFunction* function);
 
 /* Helper function for the VM to garbage collect objects.
 

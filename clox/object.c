@@ -63,6 +63,14 @@ ObjString* createString(const char* segment_start, int length) {
 }
 
 
+static void printFunction(ObjFunction* function) {
+  if (function->name == NULL) {
+    printf("<fn top-level>");
+  } else {
+    printf("<fn %s>", function->name->chars);
+  }
+}
+
 void printObject(Value value) {
   switch (OBJ_TYPE(value)) {
   case OBJ_STRING: {
@@ -71,12 +79,12 @@ void printObject(Value value) {
   }
   case OBJ_FUNCTION: {
     ObjFunction* function = AS_FUNCTION(value);
-    if (function->name == NULL) {
-      // Should not happen if interpreter is working correctly.
-      printf("<fn top-level>");
-    } else {
-      printf("<fn %s>", function->name->chars);
-    }
+    printFunction(function);
+    break;
+  }
+  case OBJ_CLOSURE: {
+    ObjClosure* closure = AS_CLOSURE(value);
+    printFunction(closure->function);
     break;
   }
   }
@@ -128,6 +136,13 @@ ObjFunction* newFunction() {
 }
 
 
+ObjClosure* newClosure(ObjFunction* function) {
+  ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+  closure->function = function;
+  return closure;
+}
+
+
 void freeObject(Obj* object) {
   switch (object->type) {
   case OBJ_STRING: {
@@ -140,6 +155,17 @@ void freeObject(Obj* object) {
     ObjFunction* function = (ObjFunction*) object;
     freeChunk(&function->chunk);
     FREE(ObjFunction, function);
+    break;
+  }
+  case OBJ_CLOSURE: {
+    ObjClosure* closure = (ObjClosure*) object;
+    // The function is not owned! We don't want to free it.
+    //
+    // Function objects contain the bytecode. They live
+    // for the entire vm lifetime.
+    //
+    // omitted code: FREE(ObjFunction, closure->function);
+    FREE(ObjClosure, closure);
     break;
   }
   }
