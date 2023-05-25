@@ -109,6 +109,7 @@ static bool call(ObjFunction* function, uint8_t arg_count) {
   }
   if ((function->arity != arg_count)) {
     runtimeError("Mismatch in argument count.");
+    return false;
   }
   CallFrame* frame = &vm.frames[vm.frameCount++];
   frame->function = function;

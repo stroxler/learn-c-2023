@@ -12,10 +12,17 @@ print x;
 }
 
 
+fun a() { b(); }
+fun b() { c(); }
+fun c() {
+  c("too", "many");
+}
+
 fun f(param0, param1) {
   x = param0;
   var y = param1;
   print x + " " + y;
+  a();
 }
 
 

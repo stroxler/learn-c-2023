@@ -692,7 +692,7 @@ static void variable(bool canAssign) {
 
 static uint8_t argumentsList() {
   uint8_t arg_count = 0;
-  if (!check(TOKEN_LEFT_PAREN)) {
+  if (!check(TOKEN_RIGHT_PAREN)) {
     do {
       expression();
       arg_count++;
