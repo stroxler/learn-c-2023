@@ -56,15 +56,23 @@ static void runtimeError(const char* format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  // Find the relevant line number and dump that as well
-  //
-  // Why the extra -1? Remember that one invariant is `ip` always
-  // points at the *next* byte we would work with, not the one we are
-  // now. If we hit an error, it happened on the previously-used byte.
-  CallFrame* frame = &vm.frames[vm.frameCount - 1];
-  size_t instruction = frame->ip - frame->function->chunk.code - 1;
-  int line = frame->function->chunk.lines[instruction];
-  fprintf(stderr, "[line %d]\n", line);
+  // For each call frame (starting with the innermost, which is
+  // at index vm.frameCount - 1)...
+  for (int frameIndex = vm.frameCount - 1; frameIndex >= 0; frameIndex --) {
+  
+    // ...Find the relevant line number and dump that as well
+    //
+    // Why the extra -1? Remember that one invariant is `ip` always
+    // points at the *next* byte we would work with, not the one we are
+    // now. If we hit an error, it happened on the previously-used byte.
+    CallFrame* frame = &vm.frames[frameIndex];
+    size_t instruction = frame->ip - frame->function->chunk.code - 1;
+    int line = frame->function->chunk.lines[instruction];
+    const char* function_name = frame->function->name == NULL ?
+      "top-level" :
+      frame->function->name->chars;
+    fprintf(stderr, "[line %d] in %s\n", line, function_name);
+  }
 
   // We're always going to abort execution when we hit a runtimeError
   // (we do it in the caller, boundaries often aren't super clean in
