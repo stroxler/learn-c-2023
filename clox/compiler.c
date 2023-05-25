@@ -964,7 +964,11 @@ static void function(FunctionType type) {
   consume(TOKEN_LEFT_BRACE, "Expect '{' to start function body.");
   block();
   ObjFunction* function = endCompiler();
-  emit2Bytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
+  // This opcode points at the function (which contains only constant
+  // data - the bytecode + constants derived from the function *ast*)
+  // and wraps it in a closure that can potentially store the runtime
+  // values of captured locals.
+  emit2Bytes(OP_CLOSURE, makeConstant(OBJ_VAL(function)));
 }
 
 

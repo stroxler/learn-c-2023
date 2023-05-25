@@ -17,7 +17,7 @@
 // (see the note in Section 24.3 about temporaries overflowing)
 
 typedef struct {
-  ObjFunction* function;
+  ObjClosure* closure;
   uint8_t* ip;
   Value* slots;  // frame pointer into vm.stack
 } CallFrame;

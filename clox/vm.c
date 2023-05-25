@@ -65,11 +65,11 @@ static void runtimeError(const char* format, ...) {
     // points at the *next* byte we would work with, not the one we are
     // now. If we hit an error, it happened on the previously-used byte.
     CallFrame* frame = &vm.frames[frameIndex];
-    size_t instruction = frame->ip - frame->function->chunk.code - 1;
-    int line = frame->function->chunk.lines[instruction];
-    const char* function_name = frame->function->name == NULL ?
+    size_t instruction = frame->ip - frame->closure->function->chunk.code - 1;
+    int line = frame->closure->function->chunk.lines[instruction];
+    const char* function_name = frame->closure->function->name == NULL ?
       "top-level" :
-      frame->function->name->chars;
+      frame->closure->function->name->chars;
     fprintf(stderr, "[line %d] in %s\n", line, function_name);
   }
 
@@ -108,27 +108,27 @@ Value peek(int distance) {
 
 /* Helpers for run() */
 
-static bool call(ObjFunction* function, uint8_t arg_count) {
+static bool call(ObjClosure* closure, uint8_t arg_count) {
   // Check that we can grab a call frame, then grab it
   if ((vm.frameCount >= FRAMES_MAX)) {
     runtimeError("Stack overflow (too many call frames).");
     return false;
   }
-  if ((function->arity != arg_count)) {
+  if ((closure->function->arity != arg_count)) {
     runtimeError("Mismatch in argument count.");
     return false;
   }
   CallFrame* frame = &vm.frames[vm.frameCount++];
-  frame->function = function;
-  frame->ip = function->chunk.code;
+  frame->closure = closure;
+  frame->ip = closure->function->chunk.code;
   frame->slots = vm.stack_top - arg_count - 1;
   return true;
 }
 
 
 static bool callValue(Value callee, uint8_t arg_count) {
-  if (IS_OBJ(callee) && IS_FUNCTION(callee)) {
-    return call(AS_FUNCTION(callee), arg_count);
+  if (IS_OBJ(callee) && IS_CLOSURE(callee)) {
+    return call(AS_CLOSURE(callee), arg_count);
   } else {
     runtimeError("Can only call functions.");
     return false;
@@ -149,7 +149,7 @@ static bool callValue(Value callee, uint8_t arg_count) {
 // (recall that the comma operator throws away the LHS of an expression)
 
 
-#define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
+#define READ_CONSTANT() (frame->closure->function->chunk.constants.values[READ_BYTE()])
 
 
 #define READ_STRING() AS_STRING(READ_CONSTANT())
@@ -196,8 +196,8 @@ static InterpretResult run() {
     }
     printf(" }\n");
     disassembleInstruction("trace:",
-			   &frame->function->chunk,
-			   (int)(frame->ip - frame->function->chunk.code));
+			   &frame->closure->function->chunk,
+			   (int)(frame->ip - frame->closure->function->chunk.code));
 			   
     #endif
     uint8_t instruction;
@@ -343,6 +343,13 @@ static InterpretResult run() {
       }
       break;
     }
+    case OP_CLOSURE: {
+      // this stores only the static data (bytecode + constants + name)
+      ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
+      ObjClosure* closure = newClosure(function);
+      push(OBJ_VAL(closure));
+      break;
+    }
     case OP_CALL: {
       uint8_t arg_count = READ_BYTE();
       // Set up the call. This can fail (e.g. if the function is not
@@ -373,9 +380,10 @@ InterpretResult interpret(const char* source) {
     return INTERPRET_COMPILE_ERROR;
   }
 
-  push(OBJ_VAL(function));
+  ObjClosure* top_level = newClosure(function);
+  push(OBJ_VAL(top_level));
   CallFrame* frame = &vm.frames[vm.frameCount++];
-  frame->function = function;
+  frame->closure = top_level;
   frame->ip = function->chunk.code;
   frame->slots = vm.stack;
 

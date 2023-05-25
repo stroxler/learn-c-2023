@@ -51,6 +51,18 @@ int jumpInstruction(const char* name, Chunk* chunk, int offset) {
 }
 
 
+int closureInstruction(Chunk* chunk, int offset) {
+  // TODO: at the moment this is basically the same as
+  // constantInstruction, but it will ge more elaborate by the time we
+  // finish with closure.
+  uint8_t constant_index = chunk->code[offset + 1];
+  printf("%-16s %4d '", "OP_CLOSURE", constant_index);
+  printValue(chunk->constants.values[constant_index]);
+  printf("'\n");
+  return offset + 2;
+}
+
+
 int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
   printf("%s %04d ", tag, offset);
 
@@ -114,6 +126,8 @@ int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
     return jumpInstruction("OP_JUMP_IF_FALSE", chunk, offset);
   case OP_CALL:
     return byteInstruction("OP_CALL", chunk, offset);
+  case OP_CLOSURE:
+    return closureInstruction(chunk, offset);
   default:
     printf("Unknown opcode %d\n", instruction);
     return offset + 1;
