@@ -59,7 +59,6 @@ static void runtimeError(const char* format, ...) {
   // For each call frame (starting with the innermost, which is
   // at index vm.frameCount - 1)...
   for (int frameIndex = vm.frameCount - 1; frameIndex >= 0; frameIndex --) {
-  
     // ...Find the relevant line number and dump that as well
     //
     // Why the extra -1? Remember that one invariant is `ip` always
@@ -308,7 +307,20 @@ static InterpretResult run() {
       break;
     }
     case OP_RETURN: {
-      return INTERPRET_OK;
+      // The result is on top of the stack. Get it, then reset frame.
+      // Note that we need to be careful of the gc here.
+      Value result = pop();
+      vm.frameCount--;
+      // If we hit a return from the top-level, we are finished
+      if (vm.frameCount == 0) {
+        return INTERPRET_OK;
+      }
+      // reset the stack top: next free slot should be
+      // where the function was before. Push the return value there.
+      vm.stack_top = frame->slots;
+      push(result);
+      // reset the current frame in run()
+      frame = &vm.frames[vm.frameCount - 1];
       break;
     }
     case OP_JUMP: {

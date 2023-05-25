@@ -266,7 +266,7 @@ void initCompiler(Compiler* compiler, FunctionType type) {
 
 
 static ObjFunction* endCompiler() {
-  emitByte(OP_RETURN);
+  emit2Bytes(OP_NIL, OP_RETURN);
   ObjFunction* function = currentCompiler->function;
 
   // if in debug mode, print the bytecode
@@ -786,6 +786,20 @@ static void printStatement() {
 }
 
 
+static void returnStatement() {
+  if (currentCompiler->type == SCRIPT_TYPE) {
+    errorAtPrevious("Cannot return from the top-level.");
+  }
+  if (check(TOKEN_SEMICOLON)) {
+    emitByte(OP_NIL);
+  } else {
+    expression();
+  }
+  consume(TOKEN_SEMICOLON, "Expect ';' after value in print statement");
+  emitByte(OP_RETURN);
+}
+
+
 static void beginScope() {
   // Bump scope depth. Nothing else needs doing.
   currentCompiler->scopeDepth++;
@@ -1076,6 +1090,8 @@ static void forStatement() {
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
+  } else if (match(TOKEN_RETURN)) {
+    returnStatement();
   } else if (match(TOKEN_IF)) {
     ifStatement();
   } else if (match(TOKEN_WHILE)) {

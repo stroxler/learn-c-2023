@@ -12,18 +12,20 @@ print x;
 }
 
 
-fun a() { b(); }
-fun b() { c(); }
-fun c() {
-  c("too", "many");
-}
-
 fun f(param0, param1) {
-  x = param0;
+  x = "x was set to " + param0 + " in f";
   var y = param1;
-  print x + " " + y;
-  a();
+  print param0 + " " + y;
 }
 
 
 f("arg0", "arg1");
+
+print x;
+
+
+fun add(a, b) {
+  return a + b;
+}
+
+print add(40, 2);
