@@ -30,6 +30,12 @@ typedef enum {
 } FunctionType;
 
 
+typedef struct {
+  uint8_t index;
+  bool isLocal;
+} StaticUpvalue;
+
+
 typedef struct Compiler {
   Local locals[UINT8_COUNT];
   int localCount;
@@ -47,6 +53,8 @@ typedef struct Compiler {
   // before one names the struct for self-reference and the after one
   // creates the typedef.
   struct Compiler* enclosing;
+  // This is only actually used in nested functions.
+  StaticUpvalue upvalues[UINT8_COUNT];
 } Compiler;
 
 
@@ -646,6 +654,71 @@ static int resolveLocal(Compiler* compiler, Token* name) {
 }
 
 
+/* Get the upvalue associated with s function accessing a nonlocal.
+
+   If this is the first such access, register with the enclosing compiler
+   a record indicating this access.
+
+   This function will never be called if we are currently compiling
+   the top-level.
+
+   The `isLocal` field will be `true` whenever the nonlocal is defined
+   in the immediately enclosing function. In that case `index` will be
+   the stack offset in the enclosing frame; in other cases `index` will
+   be whatever it was for the local case.
+
+   For any given upvalue lookup (where we don't fall back to global),
+   there will be exactly one compiler in the stack where we stop and
+   set `isLocal` to `true`; all the intervening layers will have an
+   upvalue record with `isLocal` set to `false`. The `index` will be
+   the same at all layers.
+
+   This recursive structure is what lets us figure out exactly where
+   to emit the opcodes that will move a local going out of scope off
+   the stack into the heap (i.e. when the runtime needs to "close" it).
+
+   Note that it is possible to close over a value defined in the top-level
+   function: remember that block scoping means even the top level has locals!
+ */
+static int addGetUpvalue(Compiler* compiler,
+		         uint8_t index,
+		         bool isLocal) {
+  int upvalueCount = compiler->function->upvalueCount;
+  // get match, if any
+  for (int i = 0; i < upvalueCount; i++) {
+    StaticUpvalue* upvalue = &compiler->upvalues[i];
+    if (upvalue->index == index && upvalue->isLocal == isLocal) {
+      return i;
+    }
+  }
+  // if no match, add a new upvalue
+  if (upvalueCount == UINT8_COUNT) {
+    errorAtPrevious("Too many closure variables in function.");
+    return 0;
+  }
+  compiler->upvalues[upvalueCount].isLocal = isLocal;
+  compiler->upvalues[upvalueCount].index = index;
+  return compiler->function->upvalueCount++;
+}
+
+
+static int resolveUpvalue(Compiler* compiler, Token* name) {
+  if (compiler->enclosing == NULL) {
+    return -1;
+  }
+  int local = resolveLocal(compiler->enclosing, name);
+  if (local != -1) {
+    return addGetUpvalue(compiler, (uint8_t)local, true);
+  }
+
+  int skipLevelUpvalue = resolveUpvalue(compiler->enclosing, name);
+  if (skipLevelUpvalue != -1) {
+    return addGetUpvalue(compiler, (uint8_t)skipLevelUpvalue, false);
+  }
+  return -1;
+}
+
+
 /* `canAssign` is a precedence-checking hack, specifically needed
    because we can't treat `=` as a Pratt infix operator...
 
@@ -659,20 +732,28 @@ static int resolveLocal(Compiler* compiler, Token* name) {
      the expression and add it to the stack.
 */
 static void namedVariable(Token* name, bool canAssign) {
-  int local_index = resolveLocal(currentCompiler, name);
-
-  // Determine whether to use a local or global op. The arg
-  // is an int either way, but the meaning is different: it's an
-  // index into constants for globals, vs a stack index for locals.
   uint8_t getOp, setOp, arg;
-  if (local_index == -1) {
+  // Determine whether to use a local (which means *same* function!),
+  // upvalue (~= nonlocal), or global scope.
+  //
+  // Regardless the lookup arg will be an int, but it will mean different
+  // things:
+  // - for a local, it's just an offset compared to the stack frame
+  // - for an upvalue, it's an index into a special upvalues structure
+  // - for a global, it's an index into constants
+  int found_index = resolveLocal(currentCompiler, name);
+  if (found_index != -1) {
+    getOp = OP_GET_LOCAL;
+    setOp = OP_SET_LOCAL;
+    arg = (uint8_t)found_index;
+  } else if ((found_index = resolveUpvalue(currentCompiler, name)) != -1) {
+    getOp = OP_GET_UPVALUE;
+    setOp = OP_SET_UPVALUE;
+    arg = (uint8_t)found_index;
+ } else {
     getOp = OP_GET_GLOBAL;
     setOp = OP_SET_GLOBAL;
     arg = identifierConstant(name);
-  } else {
-    getOp = OP_GET_LOCAL;
-    setOp = OP_SET_LOCAL;
-    arg = (uint8_t)local_index;
   }
 
   // For bare variables, we can decide get vs set with a simple match
@@ -969,6 +1050,14 @@ static void function(FunctionType type) {
   // and wraps it in a closure that can potentially store the runtime
   // values of captured locals.
   emit2Bytes(OP_CLOSURE, makeConstant(OBJ_VAL(function)));
+  // Make a record of all the StaticUpvalues, which will allow us to
+  // convert them to dynamic upvalues. Note we don't need a record of
+  // the count in our bytecode because that's recorded in the constant
+  // ObjFunction struct itself, which the bytecode has access to.
+  for (int i = 0; i < function->upvalueCount; i++) {
+    emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+    emitByte(compiler.upvalues[i].index);
+  }
 }
 
 

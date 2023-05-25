@@ -3,6 +3,7 @@
 #include "common.h"
 
 #include "debug.h"
+#include "object.h"
 #include "value.h"
 
 
@@ -57,9 +58,18 @@ int closureInstruction(Chunk* chunk, int offset) {
   // finish with closure.
   uint8_t constant_index = chunk->code[offset + 1];
   printf("%-16s %4d '", "OP_CLOSURE", constant_index);
-  printValue(chunk->constants.values[constant_index]);
+  Value value = chunk->constants.values[constant_index];
+  ObjFunction* function = AS_FUNCTION(value);
+  printValue(value);
   printf("'\n");
-  return offset + 2;
+  int i = 0;
+  for (; i < function->upvalueCount; i++) {
+    int isLocal = chunk->code[offset + 2 * i + 2];
+    int index = chunk->code[offset + 2 * i + 3];
+    printf("%04d      |                     %s %d\n",
+	   offset - 2, isLocal ? "local" : "not-local", index);
+  }
+  return offset + 2 * (i + 1);
 }
 
 
@@ -88,6 +98,10 @@ int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
     return byteInstruction("OP_GET_LOCAL", chunk, offset);
   case OP_SET_LOCAL:
     return byteInstruction("OP_SET_LOCAL", chunk, offset);
+  case OP_GET_UPVALUE:
+    return byteInstruction("OP_GET_UPVALUE", chunk, offset);
+  case OP_SET_UPVALUE:
+    return byteInstruction("OP_SET_UPVALUE", chunk, offset);
   case OP_NIL:
     return simpleInstruction("OP_NIL", offset);
   case OP_FALSE:

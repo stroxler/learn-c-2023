@@ -126,16 +126,26 @@ Value concatenateStrings(Value left, Value right) {
 }
 
 
-/* Get a dummy function with mostly-empty data but an initialized chunk */
+/* Get a dummy function with mostly-empty data but an initialized chunk.
+
+   Note that this is called in the *compiler*, not the interpreter -
+   functions are treated as runtime values, but they are purely static
+   (i.e. constant) and all of them are reachable from the top-level
+   Chunk. */
 ObjFunction* newFunction() {
   ObjFunction* function = ALLOCATE_OBJ(ObjFunction, OBJ_FUNCTION);
   function->arity = 0;
   function->name = NULL;
+  function->upvalueCount = 0;
   initChunk(&function->chunk);
   return function;
 }
 
 
+/* Wrap an ObjFunction in a closure. This is a runtime-only operation;
+   for the top-level script we make a dummy closure in `interpret`
+   whereas other closures are created by the OP_CLOSURE we emit for
+   function declarations. */
 ObjClosure* newClosure(ObjFunction* function) {
   ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
   closure->function = function;
