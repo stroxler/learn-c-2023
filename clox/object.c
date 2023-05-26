@@ -103,7 +103,9 @@ void printObject(Value value) {
   }
   case OBJ_CLOSURE: {
     ObjClosure* closure = AS_CLOSURE(value);
+    printf("closure(");
     printFunction(closure->function);
+    printf(")");
     break;
   }
   }
@@ -179,19 +181,30 @@ ObjUpvalue* newUpvalue(Value* value) {
 
    The purpose of the wrapper is to have a place for upvalues. */
 ObjClosure* newClosure(ObjFunction* function) {
-  ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
-  closure->function = function;
-  closure->upvalueCount = function->upvalueCount;
-  // Note that the upvalue count is known statically, so we can pre-allocate
+  // The upvalue count is known statically, so we can pre-allocate
   // and pre-initialize the pointer slots here.
   //
   // The contents will be filled out as part of the same OP_CLOSURE
   // execution where we construct this, but that has to be done inside
   // of run() so we can access the vm stack.
-  closure->upvalues = ALLOCATE(ObjUpvalue*, function->upvalueCount);
+  //
+  // Note that this has to run *before* we allocate the closure,
+  // because the ALLOCATE could trigger a GC so we don't want
+  // the closure to already exist in the heap.
+  //
+  // Note that this is an empty array of ObjUpvalue* _pointers_,
+  // there are no actual objects here. So therere's no risk of the
+  // upvalues being GC'd, they don't exist yet :)
+  ObjUpvalue** upvalues = ALLOCATE(ObjUpvalue*, function->upvalueCount);
   for (int i = 0; i < function->upvalueCount; i++) {
-    closure->upvalues[i] = NULL;
+    upvalues[i] = NULL;
   }
+  // Now that there will be no more ALLOCATE calls, we can go ahead
+  // and create the closure.
+  ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
+  closure->function = function;
+  closure->upvalues = upvalues;
+  closure->upvalueCount = function->upvalueCount;
   return closure;
 }
 

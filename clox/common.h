@@ -20,7 +20,7 @@
 
 
 #define DEBUG_STRESS_GC
-#define DEBUG_LOG_GC
+// #define DEBUG_LOG_GC
 
 #ifdef DEBUG_LOG_GC
 #define GC_LOG(...) printf(__VA_ARGS__)

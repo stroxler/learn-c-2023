@@ -483,6 +483,7 @@ static InterpretResult run() {
       // this stores only the static data (bytecode + constants + name)
       ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
       ObjClosure* closure = newClosure(function);
+      printf("         ... allocated a closure %p in OP_CLOSURE", closure);
       // Note: we must push the closure (so that it's in GC roots)
       // *before* we allocate upvalues since that could trigger GC.
       push(OBJ_VAL(closure));
