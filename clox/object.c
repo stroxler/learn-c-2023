@@ -82,6 +82,10 @@ void printObject(Value value) {
     printFunction(function);
     break;
   }
+  case OBJ_UPVALUE: {
+    printf("(upvalue)");
+    break;
+  }
   case OBJ_CLOSURE: {
     ObjClosure* closure = AS_CLOSURE(value);
     printFunction(closure->function);
@@ -102,7 +106,9 @@ bool objectEqual(Value value0, Value value1) {
     return AS_STRING(value0) == AS_STRING(value1);
   }
   default:
-    fprintf(stderr, "Should be unreachable: unknown OBJ_TYPE in objectEqual");
+    // TODO we should probably compare the Obj* pointers here - if the underlying
+    // values are actually identical (as pointers) then they are equal.
+    fprintf(stderr, "Comparison of non-string objects isn't really supported");
     return false;
 
   }
@@ -142,13 +148,35 @@ ObjFunction* newFunction() {
 }
 
 
+ObjUpvalue* newUpvalue(Value* value) {
+  ObjUpvalue* upvalue = ALLOCATE_OBJ(ObjUpvalue, OBJ_UPVALUE);
+  upvalue->location = value;
+  upvalue->next = NULL;
+  upvalue->closed = NIL_VAL;
+  return upvalue;
+}
+
+
 /* Wrap an ObjFunction in a closure. This is a runtime-only operation;
    for the top-level script we make a dummy closure in `interpret`
    whereas other closures are created by the OP_CLOSURE we emit for
-   function declarations. */
+   function declarations.
+
+   The purpose of the wrapper is to have a place for upvalues. */
 ObjClosure* newClosure(ObjFunction* function) {
   ObjClosure* closure = ALLOCATE_OBJ(ObjClosure, OBJ_CLOSURE);
   closure->function = function;
+  closure->upvalueCount = function->upvalueCount;
+  // Note that the upvalue count is known statically, so we can pre-allocate
+  // and pre-initialize the pointer slots here.
+  //
+  // The contents will be filled out as part of the same OP_CLOSURE
+  // execution where we construct this, but that has to be done inside
+  // of run() so we can access the vm stack.
+  closure->upvalues = ALLOCATE(ObjUpvalue*, function->upvalueCount);
+  for (int i = 0; i < function->upvalueCount; i++) {
+    closure->upvalues[i] = NULL;
+  }
   return closure;
 }
 
@@ -167,6 +195,13 @@ void freeObject(Obj* object) {
     FREE(ObjFunction, function);
     break;
   }
+  case OBJ_UPVALUE: {
+    ObjUpvalue* upvalue = (ObjUpvalue*) object;
+    // Do *not* free the next upvalue: the VM owns the linked
+    // list and will handle lifetimes!
+    FREE(ObjUpvalue, upvalue);
+    break;
+  }
   case OBJ_CLOSURE: {
     ObjClosure* closure = (ObjClosure*) object;
     // The function is not owned! We don't want to free it.
@@ -175,6 +210,7 @@ void freeObject(Obj* object) {
     // for the entire vm lifetime.
     //
     // omitted code: FREE(ObjFunction, closure->function);
+    FREE_ARRAY(ObjUpvalue*, closure->upvalues, closure->upvalueCount);
     FREE(ObjClosure, closure);
     break;
   }

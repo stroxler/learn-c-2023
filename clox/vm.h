@@ -30,6 +30,8 @@ typedef struct {
   // value stack
   Value stack[STACK_MAX];
   Value* stack_top;
+  // open upvalues: captures currently pointing at the stack
+  ObjUpvalue* openUpvalues;
   // heap data
   Obj* objects;
   Table strings;

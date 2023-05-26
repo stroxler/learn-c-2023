@@ -11,6 +11,7 @@ typedef enum {
   OBJ_STRING,
   OBJ_FUNCTION,
   OBJ_CLOSURE,
+  OBJ_UPVALUE,
 } ObjType;
 
 
@@ -59,10 +60,24 @@ typedef struct {
 } ObjFunction;
 
 
+typedef struct ObjUpvalue {
+  Obj obj;
+  Value* location;
+  // This is only populated for closed upvalues - it starts out nil.
+  Value closed;
+  // Hook for the vm to create a linked list of open upvalues that
+  // haven't yet been moved to the heap.
+  struct ObjUpvalue* next;
+} ObjUpvalue;
+
+
 typedef struct {
   Obj obj;
   ObjFunction* function;
+  ObjUpvalue** upvalues;
+  int upvalueCount;
 } ObjClosure;
+
 
 
 ObjString* createString(const char* segment_start, int length);
@@ -85,6 +100,7 @@ static inline bool isObjType(Value value, ObjType type) {
 
 #define IS_STRING(value) (isObjType(value, OBJ_STRING))
 #define IS_FUNCTION(value) (isObjType(value, OBJ_FUNCTION))
+#define IS_UPVALUE(value) (isObjType(value, OBJ_CLOSURE))
 #define IS_CLOSURE(value) (isObjType(value, OBJ_CLOSURE))
 
 
@@ -92,6 +108,7 @@ static inline bool isObjType(Value value, ObjType type) {
 #define AS_CSTRING(value) (((ObjString*)AS_OBJ(value))->chars)
 
 #define AS_FUNCTION(value) ((ObjFunction*)AS_OBJ(value))
+#define AS_UPVALUE(value) ((ObjClosure*)AS_OBJ(value))
 #define AS_CLOSURE(value) ((ObjClosure*)AS_OBJ(value))
 
 
@@ -102,6 +119,7 @@ bool objectEqual(Value value0, Value value1);
 Value concatenateStrings(Value left, Value right);
 
 ObjFunction* newFunction();
+ObjUpvalue* newUpvalue(Value* value);
 ObjClosure* newClosure(ObjFunction* function);
 
 /* Helper function for the VM to garbage collect objects.

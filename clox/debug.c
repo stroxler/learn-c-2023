@@ -102,6 +102,8 @@ int disassembleInstruction(const char* tag, Chunk* chunk, int offset) {
     return byteInstruction("OP_GET_UPVALUE", chunk, offset);
   case OP_SET_UPVALUE:
     return byteInstruction("OP_SET_UPVALUE", chunk, offset);
+  case OP_CLOSE_UPVALUE:
+    return simpleInstruction("OP_CLOSE_UPVALUE", offset);
   case OP_NIL:
     return simpleInstruction("OP_NIL", offset);
   case OP_FALSE:

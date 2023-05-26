@@ -20,6 +20,7 @@
 typedef struct{
   Token name;
   int depth;
+  bool isCaptured;
 } Local;
 
 
@@ -34,6 +35,26 @@ typedef struct {
   uint8_t index;
   bool isLocal;
 } StaticUpvalue;
+
+
+// Just a note about Local.isCaptured versus StaticUpvalue:
+//
+// - StaticUpvalues are associated with the compilers of functions
+//   that *don't* contain a local, because they and/or some child
+//   *uses* that variable. The variable lives at a higher scope.
+//   They are used to emit OP_CLOSURE, which in turn tells the vm
+//   how to construct an array of ObjUpvalue* for a closure.
+//
+// - Locals, on the other hand track variables defined in the *current*
+//   function (really their lifetime is just per-scope - the compiler
+//   forgets about them at the end of that scope). Because we need
+//   the vm to move locals to the heap when they go out of scope,
+//   we need to track captures (i.e. locals with associated upvalues
+//   in nested functions) somewher, and we use Local.isCaptured for
+//   this.
+//
+// They are set at the same time, when we resolve a name to an
+// upvalue, i.e. to a local of some enclosing function.
 
 
 typedef struct Compiler {
@@ -261,6 +282,7 @@ void initCompiler(Compiler* compiler, FunctionType type) {
   // to stack slot 0 in bound method).
   Local* local = &compiler->locals[compiler->localCount++];
   local->depth = 0;
+  local->isCaptured = false;
   local->name.start = "";
   local->name.length = 0;
   // Set the current compiler global
@@ -667,6 +689,12 @@ static int resolveLocal(Compiler* compiler, Token* name) {
    the stack offset in the enclosing frame; in other cases `index` will
    be whatever it was for the local case.
 
+   The meaning of "is local" is a little weird, because a "local"
+   upvalue still isn't a local of the current function, it's local to the
+   enclosing function. The meaning is clearer if you look at the VM:
+   it's local to the function *definition*, i.e. local to the current
+   frame when we execute an OP_CLOSURE opcode.
+
    For any given upvalue lookup (where we don't fall back to global),
    there will be exactly one compiler in the stack where we stop and
    set `isLocal` to `true`; all the intervening layers will have an
@@ -707,14 +735,21 @@ static int resolveUpvalue(Compiler* compiler, Token* name) {
     return -1;
   }
   int local = resolveLocal(compiler->enclosing, name);
+  // This is a "local" upvalue, owned by the enclosing scope.
+  // Mark the associated Local as captured, and set a local upvalue.
   if (local != -1) {
+    compiler->enclosing->locals[local].isCaptured = true;
     return addGetUpvalue(compiler, (uint8_t)local, true);
   }
-
+  // Do a recursive search until we either hit the variable or
+  // reach global scope. If we find it, set a nonlocal upvalue
+  // (note that we'll set it on all intervening functions too!)
   int skipLevelUpvalue = resolveUpvalue(compiler->enclosing, name);
   if (skipLevelUpvalue != -1) {
     return addGetUpvalue(compiler, (uint8_t)skipLevelUpvalue, false);
   }
+  // Nothing found - treat this as a global variable. No upvalue
+  // code is needed.
   return -1;
 }
 
@@ -898,8 +933,18 @@ static void endScope() {
   while(currentCompiler->localCount > 0 &&
 	(currentCompiler->locals[currentCompiler->localCount - 1].depth
 	 > outer_scope_depth)) {
+    Local* local = &currentCompiler->locals[currentCompiler->localCount - 1];
+    // If there's no capture, we can just let the local go out of scope.
+    //
+    // Otherwise we need an opcode so the vm knows to preserve it on
+    // the heap - this is how captures can hang onto locals that went
+    // out of scope!
+    if (local->isCaptured) {
+      emitByte(OP_CLOSE_UPVALUE);
+    } else {
+      emitByte(OP_POP);
+    }
     currentCompiler->localCount--;
-    emitByte(OP_POP);
   }
 }
 
@@ -923,6 +968,7 @@ static void addLocal(Token name) {
   Local* local = &currentCompiler->locals[currentCompiler->localCount++];
   local->name = name;
   local->depth = -1; // we'll soon set it to `currentCompiler->scopeDepth`
+  local->isCaptured = false;
 }
 
 

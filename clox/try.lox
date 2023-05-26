@@ -29,3 +29,43 @@ fun add(a, b) {
 }
 
 print add(40, 2);
+
+
+fun outer() {
+  var x = "x";
+
+  fun middle() {
+
+    var y = "y";
+
+    fun inner(action) {
+      if (action == "get x") {
+        return x;
+      } else if (action == "get y") {
+        return y;
+      } else if (action == "lengthen x") {
+        x = x + "x";
+        return;
+      } else if (action == "lengthen y") {
+        y = y + "y";
+        return;
+      }
+    }
+    return inner;
+  }
+
+  return middle();
+}
+
+
+var actor = outer();
+
+actor("lengthen x");
+print "outer.x = " + actor("get x");
+print "middle.y = " + actor("get y");
+
+actor("lengthen y");
+actor("lengthen y");
+print "outer.x = " + actor("get x");
+print "middle.y = " + actor("get y");
+

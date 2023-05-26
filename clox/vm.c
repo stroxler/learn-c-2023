@@ -46,6 +46,7 @@ void initVM() {
   initTable(&vm.strings);
   initTable(&vm.globals);
   vm.frameCount = 0;
+  vm.openUpvalues = NULL;
 }
 
 static void runtimeError(const char* format, ...) {
@@ -134,6 +135,52 @@ static bool callValue(Value callee, uint8_t arg_count) {
     return false;
   }
 }
+
+
+static ObjUpvalue* captureUpvalue(Value* local) {
+  // Search for an upvalue that already exists on this local.
+  //
+  // We can find it by just comparing the value pointer (which is a
+  // stack slot). We keep the list reverse-ordered by stack position
+  // so that searches are generally cheap.
+  ObjUpvalue* upvalue = vm.openUpvalues;
+  ObjUpvalue** insert_pointer = &vm.openUpvalues;
+  while (upvalue != NULL && upvalue->location > local) {
+    insert_pointer = &upvalue->next;
+    upvalue = upvalue->next;
+  }
+  // At this point we either found the upvalue or we are ready to
+  // insert a new one in front of `upvalue`.
+  if (upvalue != NULL && upvalue->location == local) {
+    return upvalue;
+  } else {
+    ObjUpvalue* created = newUpvalue(local);
+    *insert_pointer = created;  // (-> binds tighter than *)
+    created->next = upvalue;
+    return created;
+  }
+}
+
+
+/* Close all open upvalues associated with this local or anything
+   deeper in the stack ("deeper in the stack" matters when we end
+   a function and reset the frame all at once with no OP_POPs).
+   
+   Note that all of them will live at the list head. */
+static void closeUpvalues(Value* last) {
+  while (vm.openUpvalues != NULL
+	 && vm.openUpvalues->location > last) {
+    ObjUpvalue* upvalue = vm.openUpvalues;
+    // Copy the Value out of the stack and into `closed`, *moving*
+    // any associated *Obj pointer (in the rust ownership sense).
+    //
+    // The VM heap is essentially composed of closed upvalues.
+    upvalue->closed = *upvalue->location;
+    upvalue->location = &upvalue->closed;
+    vm.openUpvalues = vm.openUpvalues->next;
+  }
+}
+
 
 
 /* Macros for `run()`. We unset them after. */
@@ -306,12 +353,32 @@ static InterpretResult run() {
       push(frame->slots[slot]);
       break;
     }
+    case OP_SET_UPVALUE: {
+      uint8_t upvalue_slot = READ_BYTE();
+      Value* location = frame->closure->upvalues[upvalue_slot]->location;
+      *location = peek(0);
+      break;
+    }
+    case OP_GET_UPVALUE: {
+      uint8_t upvalue_slot = READ_BYTE();
+      Value* location = frame->closure->upvalues[upvalue_slot]->location;
+      push(*location);
+      break;
+    }
+    case OP_CLOSE_UPVALUE: {
+      closeUpvalues(vm.stack_top - 1);
+      pop();
+      break;
+    }
     case OP_RETURN: {
       // The result is on top of the stack. Get it, then reset frame.
       // Note that we need to be careful of the gc here.
       Value result = pop();
+      // Close all the open upvalues pointing into the current stack
+      // frame, then go ahead and remove the stack frame (exiting if
+      // we're already at the top level).
+      closeUpvalues(frame->slots);
       vm.frameCount--;
-      // If we hit a return from the top-level, we are finished
       if (vm.frameCount == 0) {
         return INTERPRET_OK;
       }
@@ -347,6 +414,22 @@ static InterpretResult run() {
       // this stores only the static data (bytecode + constants + name)
       ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
       ObjClosure* closure = newClosure(function);
+      for (int i = 0; i < closure->upvalueCount; i++) {
+	uint8_t isLocal = READ_BYTE();
+	uint8_t index = READ_BYTE();
+	// If isLocal, the capture is one layer up (i.e. the current frame)
+	// and we may actually need to create an upvalue.
+	//
+	// Otherwise it's somewhere further up the call stack, and we want
+	// to get the upvalue pointer from the current frame (they will be
+	// tracked all the way to whatever scope the upvalue lives in,
+	// across all intermediate frames).
+	if (isLocal) {
+	  closure->upvalues[i] = captureUpvalue(frame->slots + index);
+	} else {
+	  closure->upvalues[i] = frame->closure->upvalues[index];
+	}
+      }
       push(OBJ_VAL(closure));
       break;
     }
