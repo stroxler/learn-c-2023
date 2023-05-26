@@ -4,6 +4,10 @@
 #include "memory.h"
 #include "value.h"
 
+// (only needed to push values for gc safety; we could alternatively
+//  add a hook in the compiler to register an extra "temp" gc root)
+#include "vm.h"
+
 #include "chunk.h"
 
 
@@ -16,8 +20,15 @@ void initChunk(Chunk* chunk) {
 }
 
 
+#include <stdio.h>
+
+
 int addConstant(Chunk* chunk, Value value) {
+  push(value);
+  printf("pushed value "); printValue(value); printf("\n");
   writeValueArray(&chunk->constants, value);
+  printf("wrote value "); printValue(value); printf("\n");
+  pop();
   return chunk->constants.count - 1;
 }
 

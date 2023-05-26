@@ -27,6 +27,11 @@ void initTable(Table* table);
 void freeTable(Table* table);
 
 
+void markTable(Table* table);
+
+void tableDeleteUnmarkedKeys(Table* table);
+
+
 bool tableSet(Table* table, ObjString* key, Value value);
 
 

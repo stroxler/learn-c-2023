@@ -59,6 +59,26 @@ void freeTable(Table* table) {
 }
 
 
+void markTable(Table* table) {
+  for (int i = 0; i < table->capacity; i++) {
+    Entry* entry = &table->entries[i];
+    // Note that these can be NULL; that's okay b/c markObject handles NULL
+    markObject((Obj*)entry->key);
+    markValue(entry->value);
+  }
+}
+
+
+void tableDeleteUnmarkedKeys(Table* table) {
+  for (int i = 0; i < table->capacity; i++) {
+    Entry* entry = &table->entries[i];
+    if (entry->key != NULL && !entry->key->obj.isMarked) {
+      tableDelete(table, entry->key);
+    }
+  }
+}
+
+
 /* Find an entry, if there is one.  This function is not safe
    to call unless we know the table has capacity. In general, conditions
    for it to work:

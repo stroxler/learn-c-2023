@@ -5,6 +5,7 @@
 #include "object.h"
 #include "chunk.h"
 
+void markCompilerRoots();
 
 ObjFunction* compile(const char* source);
 

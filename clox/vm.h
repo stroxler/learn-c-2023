@@ -55,6 +55,10 @@ typedef enum {
 
 void initVM();
 
+// GC hooks (driven by memory.h code)
+void markVmRoots();
+void sweepVmObjects();
+
 InterpretResult interpret(const char* source);
 
 void push(Value value);

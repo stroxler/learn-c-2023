@@ -8,9 +8,21 @@
 #include "object.h"
 
 
+const char* typeName(ObjType type) {
+  switch(type){
+  case OBJ_STRING: return "OBJ_STRING";
+  case OBJ_FUNCTION: return "OBJ_FUNCTION";
+  case OBJ_CLOSURE: return "OBJ_CLOSURE";
+  case OBJ_UPVALUE: return "OBJ_UPVALUE";
+  }
+}
+
 static Obj* allocateObject(size_t size, ObjType type) {
   Obj* object = (Obj*)reallocate(NULL, 0, size);
   object->type = type;
+  object->isMarked = false;
+  GC_LOG("%p allocate (size %zu) of type %s\n", (void*)object, size, typeName(type));
+  vmInsertObjectIntoHeap(object);
   return object;
 }
 
@@ -41,8 +53,11 @@ ObjString* allocateString(char* chars, int length) {
     string->chars = chars;
     string->length = length;
     string->hash = hashChars(chars, length);
-    vmInsertObjectIntoHeap((Obj*)string);
+    // adding the string to the table could trigger a GC, so guard
+    // with a push / pop.
+    push(OBJ_VAL(string));
     vmAddInternedString(string);
+    pop();
   }
   return string;
 }
@@ -182,6 +197,7 @@ ObjClosure* newClosure(ObjFunction* function) {
 
 
 void freeObject(Obj* object) {
+  GC_LOG("%p free type %s\n", (void*)object, typeName(object->type));
   switch (object->type) {
   case OBJ_STRING: {
     ObjString* string = (ObjString*) object;

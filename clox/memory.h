@@ -1,6 +1,8 @@
 #ifndef clox_memory_h
 #define clox_memory_h
 
+#include "object.h"
+#include "value.h"
 #include "common.h"
 
 
@@ -17,6 +19,14 @@
 
 
 void* reallocate(void* pointer, size_t old_size, size_t new_size);
+
+// why are these exposed? Because we rely on inlined mark helpers
+// for table.c and compiler.c that need access to them.
+
+void markObject(Obj* object);
+void markValue(Value value);
+
+void collectGarbage();
 
 #define ALLOCATE(type, size) \
   reallocate(NULL, 0, sizeof(type) * size)

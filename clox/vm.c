@@ -5,6 +5,7 @@
 #include "compiler.h"
 #include "debug.h"
 #include "object.h"
+#include "memory.h"
 #include "table.h"
 
 #include "vm.h"
@@ -15,6 +16,60 @@
 // We could refactor later to make it a regular varable, which
 // would allow us to instantiate multiple vms.
 VM vm;
+
+
+void markVmRoots() {
+  // Mark the value stack
+  GC_LOG("     -- mark vm stack --\n");
+  for (Value* slot = vm.stack; slot < vm.stack_top; slot++) {
+    markValue(*slot);
+  }
+  // Mark the call stack - each closure is an object
+  GC_LOG("     -- mark vm frames --\n");
+  for (int i = 0; i < vm.frameCount; i++) {
+    markObject((Obj*)vm.frames[i].closure);
+  }
+  // Mark the globals
+  GC_LOG("     -- mark vm globals --\n");
+  markTable(&vm.globals);
+  // Mark the open upvalues
+  //
+  // Why is this needed? Well, we don't actually remove these
+  // upvalues until the local goes out of scope, so even if there's
+  // no live reference to the upvalue it will still be sitting in
+  // our linked list. Deallocating it would break the list!
+  //
+  // It's also possible that some closure will come along and
+  // actually reuse an upvalue that has no current frame reference.
+  for (ObjUpvalue* upvalue = vm.openUpvalues;
+       upvalue != NULL;
+       upvalue = upvalue->next) {
+    markObject((Obj*)upvalue);
+  }
+}
+
+
+void sweepVmObjects() {
+  // First, delete unused interned strings (otherwise, the table keys
+  // would contain danging pointers post-sweep!)
+  tableDeleteUnmarkedKeys(&vm.strings);
+  // Now, sweep the heap
+  Obj** previous_pointer = &vm.objects;
+  while (*previous_pointer != NULL) {
+    Obj* object = *previous_pointer;
+    if (object->isMarked) {
+      // bump previous_pointer
+      previous_pointer = &object->next;
+      // unmark the object
+      object->isMarked = false;
+    } else {
+      // redefine previous pointer
+      *previous_pointer = object->next;
+      freeObject(object);
+    }
+  }
+}
+
 
 
 void vmInsertObjectIntoHeap(Obj* object) {
@@ -82,6 +137,11 @@ static void runtimeError(const char* format, ...) {
 }
 
 
+/* Note that the value stack is *statically* sized, so push will never
+   trigger a GC. We rely on this heavily - any time we call into code
+   that could trigger a resize operation, we can temporarily push any
+   values that the GC would otherwise be unaware of.
+*/
 void push(Value value) {
   // Note that if we were defensive, we'd be checking for stack
   // overflow and underflow in push / pop. That would catch errors in
@@ -263,9 +323,15 @@ static InterpretResult run() {
     case OP_ADD: {
       // Unlike most other ops, OP_ADD is polymorphic over numbers and strings
       if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
-	Value right = pop();
-	Value left = pop();
-	push(concatenateStrings(left, right));
+	// Note: we cannot pop these and then pass them to concatenateStrings,
+	// because the GC could be triggered when we ALLOCATE the new string
+	// and that could invalidate them. Hence the peek / pop bracketing.
+	Value right = peek(0);
+	Value left = peek(1);
+	Value concatenated = concatenateStrings(left, right);
+	pop();
+	pop();
+	push(concatenated);
       } else {
 	C_BINARY_NUMERIC_OP(NUMBER_VAL, +);
       }
@@ -372,7 +438,10 @@ static InterpretResult run() {
     }
     case OP_RETURN: {
       // The result is on top of the stack. Get it, then reset frame.
-      // Note that we need to be careful of the gc here.
+      //
+      // Note that we need to be careful of the gc here!
+      // None of these operations can call ALLOCATE, so it's okay to
+      // delay the push.
       Value result = pop();
       // Close all the open upvalues pointing into the current stack
       // frame, then go ahead and remove the stack frame (exiting if
@@ -414,6 +483,9 @@ static InterpretResult run() {
       // this stores only the static data (bytecode + constants + name)
       ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
       ObjClosure* closure = newClosure(function);
+      // Note: we must push the closure (so that it's in GC roots)
+      // *before* we allocate upvalues since that could trigger GC.
+      push(OBJ_VAL(closure));
       for (int i = 0; i < closure->upvalueCount; i++) {
 	uint8_t isLocal = READ_BYTE();
 	uint8_t index = READ_BYTE();
@@ -430,7 +502,6 @@ static InterpretResult run() {
 	  closure->upvalues[i] = frame->closure->upvalues[index];
 	}
       }
-      push(OBJ_VAL(closure));
       break;
     }
     case OP_CALL: {
@@ -463,8 +534,18 @@ InterpretResult interpret(const char* source) {
     return INTERPRET_COMPILE_ERROR;
   }
 
+  // At this point, there are no compiler GC roots, and
+  // `function` is not protected. But `newClosure` will
+  // call ALLOCATE which could trigger a GC.
+  //
+  // So, temporarily push the function and only pop it right
+  // before we push the closure. This ensures that no GC will
+  // run until our top-level function is on the stack.
+  push(OBJ_VAL(function));
   ObjClosure* top_level = newClosure(function);
+  pop();
   push(OBJ_VAL(top_level));
+
   CallFrame* frame = &vm.frames[vm.frameCount++];
   frame->closure = top_level;
   frame->ip = function->chunk.code;

@@ -15,6 +15,8 @@ typedef enum {
 } ObjType;
 
 
+const char* typeName(ObjType type);
+
 
 // Obj is a base struct.
 //
@@ -33,6 +35,7 @@ typedef enum {
 // Note the non-typedef form here - the typedef was a forward declaration in value.h
 struct Obj {
   ObjType type;
+  bool isMarked;
   Obj* next;  // objects form a linked list so the vm can keep track of all heap data
 };
 
@@ -77,7 +80,6 @@ typedef struct {
   ObjUpvalue** upvalues;
   int upvalueCount;
 } ObjClosure;
-
 
 
 ObjString* createString(const char* segment_start, int length);

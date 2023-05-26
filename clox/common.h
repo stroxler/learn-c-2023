@@ -18,4 +18,15 @@
 
 #define UINT8_COUNT (UINT8_MAX + 1)
 
+
+#define DEBUG_STRESS_GC
+#define DEBUG_LOG_GC
+
+#ifdef DEBUG_LOG_GC
+#define GC_LOG(...) printf(__VA_ARGS__)
+#else
+#define GC_LOG(...) ;
+#endif 
+
+// (end of ifdef clox_common_h)
 #endif

@@ -83,6 +83,23 @@ typedef struct Compiler {
 Compiler* currentCompiler = NULL;
 
 
+void markCompilerRoots() {
+  for (Compiler* compiler = currentCompiler;
+       compiler != NULL;
+       compiler = compiler->enclosing) {
+    // Note: the function object "owns" all the constant data, so
+    // we can rely on the recursive GC to find that. The only "roots"
+    // are the functions themselves.
+    //
+    // Note that most functions are actually going to get marked through
+    // recursion from the top-level function, since every define produces
+    // a constant. We only have to treat the functions that are *partially*
+    // defined (i.e. those in the current compiler stack) as roots.
+    markObject((Obj*)compiler->function);
+  }
+}
+
+
 typedef struct {
   Token current;
   Token previous;
@@ -310,6 +327,19 @@ static ObjFunction* endCompiler() {
   // pop back to the parent compiler (NULL if this is already
   // top-level, otherwise the enclosing scope after a function).
   currentCompiler = currentCompiler->enclosing;
+
+  // NOTE: ^ this is dangerous for GC: at this point there is no
+  // GC root that's aware of the current funciton! The only reason
+  // we can get away with this during compilation is because the
+  // next possible ALLOCATE operation won't happen until after
+  // addConstant (from chunk.c) guards the value by pushing it
+  // temporarily.
+  //
+  // Similarly, at the compiler / interpreter boundary it is dangerous,
+  // and our allocation of the top-level closure could GC the entire
+  // codebase! As a result, in `interpret()` we guard the closure
+  // creation with a push / pop.
+
   return function;
 }
 
