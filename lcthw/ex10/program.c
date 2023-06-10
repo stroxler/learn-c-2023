@@ -8,7 +8,7 @@ int main(int argc, char* argv[])
     "Washington"
   };
   
-  int num_states = 3;
+  int num_states = sizeof(states) / sizeof(char*);
 
   for (int i = 0; i < num_states; i++) {
     printf("State %d = %s\n", i, states[i]);
